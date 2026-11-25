@@ -39,10 +39,10 @@ Sessions 页也会读到这些账号的对话：magpie 会读家目录下每个 
 
 ## 安装
 
-在 magpie 的插件页添加，或者：
+在 magpie 的插件页添加 `github:zwenooo/magpie-reclaude`，或者：
 
 ```sh
-magpie plugin add github:zwenooo/magpie-plugins#reclaude-v0.1.2
+magpie plugin add github:zwenooo/magpie-reclaude
 ```
 
 ## 选项
@@ -79,3 +79,19 @@ magpie plugin add github:zwenooo/magpie-plugins#reclaude-v0.1.2
 bun test                     # 在本文件夹里
 magpie plugin add <本文件夹>  # 直接装本地文件夹，改了文件 magpie 会自己重启宿主
 ```
+
+## 版本
+
+`main` 分支就是最新版。按上面的地址装（不带 `#…`），magpie 会跟着 `main`，有新提交时
+提示更新。要固定某个版本，用 `github:zwenooo/magpie-reclaude#v<版本>`。
+
+发布新版本：改好、提交后，把 `package.json` 的 version 提上去，提交，再
+`git tag v<版本> && git push origin main v<版本>`。
+
+这个插件原先在 [zwenooo/magpie-plugins](https://github.com/zwenooo/magpie-plugins)
+的 `packages/reclaude` 里（最后一版是 tag `reclaude-v0.1.2`），2026-11-25 拆成了独立仓库。
+那边还有 skill 和这些插件的来龙去脉（`docs/roadmap.md`）。
+
+## 许可
+
+MIT
