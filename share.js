@@ -190,7 +190,10 @@ export function shareAccount(account, sharedDir, { quietMs = 10 * 60_000, now = 
         continue
       }
       if (st) {
-        if (now - newest(link) < quietMs) {
+        // a folder with no file in it (one ReClaude made with a new
+        // account) has no session to wait for
+        const last = newest(link)
+        if (last > 0 && now - last < quietMs) {
           out.waiting.push(name)
           continue
         }

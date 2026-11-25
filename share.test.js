@@ -160,3 +160,13 @@ test("memory notes 0.2.0 parked in conflicts are joined in, once", () => {
   expect(fs.existsSync(path.join(shared, "conflicts", "7", "projects", "D--x", "s.jsonl"))).toBe(true)
   expect(resolveParked(shared)).toBe(0)
 })
+
+test("a new account's empty folders are linked at once, with no wait", () => {
+  const a = account("9")
+  fs.mkdirSync(path.join(a.dir, "projects", "D--x"), { recursive: true })
+  fs.mkdirSync(path.join(a.dir, "file-history"))
+  const r = shareAccount(a, shared, { quietMs: 10 * 60_000 })
+  expect(r.waiting).toEqual([])
+  expect(r.linked).toEqual(["projects", "file-history"])
+  expect(fs.lstatSync(path.join(a.dir, "projects")).isSymbolicLink()).toBe(true)
+})
