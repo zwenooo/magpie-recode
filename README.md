@@ -1,8 +1,10 @@
-# reclaude
+# ReCode
 
-让 ReClaude 的每个账号在 magpie 的 Library 里成为一行 `claude#rec-<id>`，
+<img src="https://www.recode.cat/logo/logo-single.svg" width="48" alt="ReCode">
+
+让 [ReCode](https://www.recode.cat)（ReClaude）的每个账号在 magpie 的 Library 里成为一行 `claude#rec-<id>`，
 并且跟随 Claude Code（`claude` 行）的 MCP server、skill 和说明。换了新的
-ReClaude 账号，第一次开 Claude 会话前就已经有 magpie 的 hub。
+ReCode 账号，第一次开 Claude 会话前就已经有 magpie 的 hub。
 
 只用 magpie 官方的功能，不需要改 magpie。**只用于官方版 magpie**：在 zwenooo/magpie
 fork（版本号带 `-vb.`）上它什么都不做，因为 fork 自己会为每个账号建一行，再加
@@ -62,11 +64,15 @@ Claude Code 只在当前账号的 `projects/` 里找可以 `/resume` 的会话�
 
 ## 安装
 
-在 magpie 的插件页添加 `github:zwenooo/magpie-reclaude`，或者：
+在 magpie 的插件页添加 `github:zwenooo/magpie-recode`，或者：
 
 ```sh
-magpie plugin add github:zwenooo/magpie-reclaude
+magpie plugin add github:zwenooo/magpie-recode
 ```
+
+0.3.0 之前叫 reclaude（`github:zwenooo/magpie-reclaude`，包名 `magpie-plugin-reclaude`）。从旧版换过来：先
+`magpie plugin rm github:zwenooo/magpie-reclaude`，再装上面的地址，选项要重新设（比如
+`shareSessions`）。junction、共享文件夹和 Library 里的勾选都不受影响。
 
 ## 选项
 
@@ -74,7 +80,7 @@ magpie plugin add github:zwenooo/magpie-reclaude
 
 | 选项 | 默认 | 作用 |
 | --- | --- | --- |
-| `recRoot` | `~/.rec/claude/accounts` | ReClaude 的账号文件夹 |
+| `recRoot` | `~/.rec/claude/accounts` | ReCode 的账号文件夹 |
 | `magpie` | 自动找 | magpie 命令行的路径。默认用启动插件宿主的那个 magpie 旁边的 `magpie.com`（Windows）或 `magpie`，找不到再用 PATH 里的 |
 | `every` | `5000` | 多少毫秒检查一次 |
 | `follow` | `true` | `false` 时只建 junction，不改勾选 |
@@ -90,14 +96,14 @@ magpie plugin add github:zwenooo/magpie-reclaude
   插件在里面也会检查一次。所有检查都可以重复做，并且同一时刻只有一个在做
   （系统临时目录下的 `magpie-reclaude.lock`）。
 - 读写的是 magpie 的 `library.json`，它的格式不是公开接口。magpie 升级后，
-  如果日志里出现 `[reclaude]` 的报错，或者新账号没有拿到 hub，先看这里。
+  如果日志里出现 `[recode]` 的报错，或者新账号没有拿到 hub，先看这里。
 - 欠着的同步记在系统临时目录的 `magpie-reclaude.lock.sync-owed`，做到一半被
   结束的进程留下的同步，下一次检查会补上。
-- 在终端里从 ReClaude 账号的会话运行 magpie 命令时，环境里有
+- 在终端里从 ReCode 账号的会话运行 magpie 命令时，环境里有
   `CLAUDE_CONFIG_DIR`，那个 magpie 会把该账号当成 Claude Code。插件在这样的
   进程里不工作。
 - 项目级的设置（Library › Projects 里单独给某个项目加减的 MCP）不会跟随。
-- 日志在 magpie 的日志里，以 `plugin: [reclaude]` 开头。
+- 日志在 magpie 的日志里，以 `plugin: [recode]` 开头（0.3.0 之前是 `[reclaude]`）。
 
 ## 开发
 
@@ -109,13 +115,14 @@ magpie plugin add <本文件夹>  # 直接装本地文件夹，改了文件 magp
 ## 版本
 
 `main` 分支就是最新版。按上面的地址装（不带 `#…`），magpie 会跟着 `main`，有新提交时
-提示更新。要固定某个版本，用 `github:zwenooo/magpie-reclaude#v<版本>`。
+提示更新。要固定某个版本，用 `github:zwenooo/magpie-recode#v<版本>`。
 
 发布新版本：改好、提交后，把 `package.json` 的 version 提上去，提交，再
 `git tag v<版本> && git push origin main v<版本>`。
 
 这个插件原先在 [zwenooo/magpie-plugins](https://github.com/zwenooo/magpie-home)（现已改名为 magpie-home）
-的 `packages/reclaude` 里（最后一版是 tag `reclaude-v0.1.2`），2026-11-25 拆成了独立仓库。
+的 `packages/reclaude` 里（最后一版是 tag `reclaude-v0.1.2`），2026-11-25 拆成了独立仓库
+`zwenooo/magpie-reclaude`，同一天在 0.3.0 改名为 ReCode（`zwenooo/magpie-recode`）。
 那边还有 skill 和这些插件的来龙去脉（`docs/roadmap.md`）。
 
 ## 许可

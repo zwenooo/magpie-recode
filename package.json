@@ -1,7 +1,7 @@
 {
-  "name": "magpie-plugin-reclaude",
-  "version": "0.2.2",
-  "description": "ReClaude accounts as magpie Library rows (claude#rec-<id>) that follow Claude Code's MCP servers, skills and instructions",
+  "name": "magpie-plugin-recode",
+  "version": "0.3.0",
+  "description": "ReCode (recode.cat) accounts as magpie Library rows (claude#rec-<id>) that follow Claude Code's MCP servers, skills and instructions, with optional sessions shared across accounts",
   "type": "module",
   "main": "index.js",
   "files": [
@@ -14,9 +14,15 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/zwenooo/magpie-reclaude.git"
+    "url": "git+https://github.com/zwenooo/magpie-recode.git"
   },
   "magpie": {
+    "name": "ReCode",
+    "icon": "https://www.recode.cat/logo/logo-single.svg",
+    "summary": {
+      "en": "ReCode accounts as Library rows (claude#rec-<id>) that follow Claude Code's MCP servers, skills and instructions; optionally one shared sessions folder for every account.",
+      "zh": "ReCode 的每个账号成为 Library 的 claude#rec-<id> 行，跟随 Claude Code 的 MCP、skill 和说明；可选所有账号共用一个会话文件夹。"
+    },
     "options": {
       "recRoot": "",
       "magpie": "",

@@ -369,7 +369,7 @@ export class Follower {
     this.sharedDir = o.sharedDir || path.join(this.home, ".rec-sessions")
     this.quietMs = Math.max(0, Number(o.quietMinutes ?? 10)) * 60_000
     this.shareNext = new Map() // account id → when to look at it again
-    this.log = o.log || ((m) => console.error(`[reclaude] ${m}`))
+    this.log = o.log || ((m) => console.error(`[recode] ${m}`))
     this.lockDir = o.lockDir || path.join(os.tmpdir(), "magpie-reclaude.lock")
     this.owedFile = o.owedFile || path.join(path.dirname(this.lockDir), path.basename(this.lockDir) + ".sync-owed")
     this.failures = 0

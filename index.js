@@ -6,11 +6,11 @@ import { Follower, whyNot } from "./follow.js"
 
 let follower
 
-export default async function ReClaude(_input, options = {}) {
+export default async function ReCode(_input, options = {}) {
   const configDir = options.configDir || process.cwd()
   const why = whyNot(process.env, configDir)
   if (why) {
-    if (process.env.CLAUDE_CONFIG_DIR) console.error(`[reclaude] ${why}`)
+    if (process.env.CLAUDE_CONFIG_DIR) console.error(`[recode] ${why}`)
   } else if (!follower) {
     follower = new Follower({ ...options, configDir }).start()
   }
