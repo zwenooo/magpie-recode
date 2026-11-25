@@ -17,7 +17,7 @@ import fs from "node:fs"
 import os from "node:os"
 import path from "node:path"
 import { execFile } from "node:child_process"
-import { shareAccount } from "./share.js"
+import { resolveParked, shareAccount } from "./share.js"
 
 const LINK_PREFIX = ".claude-rec-"
 const ROW_PREFIX = "claude#rec-"
@@ -475,12 +475,21 @@ export class Follower {
   // an account busy with a session is looked at again a minute later.
   shareSessions(accounts) {
     const now = Date.now()
+    if (!this.parkedDone) {
+      this.parkedDone = true
+      try {
+        const n = resolveParked(this.sharedDir)
+        if (n) this.log(`${n} memory note(s) parked in ${path.join(this.sharedDir, "conflicts")} joined into the shared memory`)
+      } catch (e) {
+        this.say(`joining parked memory notes: ${e.message}`)
+      }
+    }
     for (const a of accounts) {
       if ((this.shareNext.get(a.id) ?? 0) > now) continue
       const r = shareAccount(a, this.sharedDir, { quietMs: this.quietMs, now })
       for (const p of r.problems) this.say(p)
       for (const [name, did] of Object.entries(r.merged)) {
-        this.log(`account ${a.id}: ${name} merged into ${path.join(this.sharedDir, name)} (${did.moved} moved, ${did.dropped} the same already there, ${did.kept} kept apart in conflicts)`)
+        this.log(`account ${a.id}: ${name} merged into ${path.join(this.sharedDir, name)} (${did.moved} moved, ${did.dropped} the same already there, ${did.joined} memory index(es) joined, ${did.kept} kept apart)`)
       }
       for (const name of r.linked) this.log(`account ${a.id}: ${name} now shared`)
       if (r.waiting.length || r.problems.length) this.shareNext.set(a.id, now + 60_000)

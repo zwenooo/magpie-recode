@@ -79,10 +79,57 @@ function same(a, b) {
   return !!sa && !!sb && sa.size === sb.size && hash(a) === hash(b)
 }
 
+// A project's memory (projects/<project>/memory/*.md: Claude Code's
+// MEMORY.md index and the notes it points to) was each account's own and
+// becomes every account's. Two accounts' MEMORY.md are joined line by
+// line; of two different notes under one name the newer keeps the name,
+// the other is kept beside it as <name>.from-<account>.md and indexed.
+function inMemory(dst) {
+  return path.basename(path.dirname(dst)) === "memory" && dst.endsWith(".md")
+}
+
+function writeFile(p, text) {
+  const tmp = `${p}.reclaude-${process.pid}.tmp`
+  fs.writeFileSync(tmp, text)
+  fs.renameSync(tmp, p)
+}
+
+function joinIndex(dst, extra) {
+  const have = fs.existsSync(dst) ? fs.readFileSync(dst, "utf8") : ""
+  const lines = have.split(/\r?\n/)
+  const seen = new Set(lines.map((l) => l.trim()).filter(Boolean))
+  const add = extra.split(/\r?\n/).filter((l) => l.trim() && !seen.has(l.trim()))
+  if (add.length === 0) return false
+  writeFile(dst, have.replace(/\s*$/, "") + (have.trim() ? "\n" : "") + add.join("\n") + "\n")
+  return true
+}
+
+// mergeMemory takes the note src into the shared memory note dst (which
+// exists and differs) and says what it did: "joined" or "kept".
+export function mergeMemory(src, dst, who) {
+  if (path.basename(dst) === "MEMORY.md") {
+    joinIndex(dst, fs.readFileSync(src, "utf8"))
+    fs.rmSync(src)
+    return "joined"
+  }
+  const srcNewer = (lstat(src)?.mtimeMs ?? 0) > (lstat(dst)?.mtimeMs ?? 0)
+  const stem = path.basename(dst, ".md")
+  const label = srcNewer ? "earlier" : who || "another"
+  const other = path.join(path.dirname(dst), `${stem}.from-${label}.md`)
+  const older = srcNewer ? dst : src
+  if (fs.existsSync(other) && same(other, older)) fs.rmSync(older)
+  else fs.renameSync(older, other)
+  if (srcNewer) fs.renameSync(src, dst)
+  joinIndex(path.join(path.dirname(dst), "MEMORY.md"), `- [${stem} (from account ${label})](${path.basename(other)}) — another copy of ${stem}.md, kept when the accounts' memories were joined`)
+  return "kept"
+}
+
 // merge moves everything in from into to, folder by folder. moved,
-// dropped (the same bytes were there) and kept (a different file was
-// there: the older of the two went to conflicts) count what it did.
-export function merge(from, to, conflicts, did = { moved: 0, dropped: 0, kept: 0 }) {
+// dropped (the same bytes were there), joined (a memory note taken in)
+// and kept (a different file was there: the older of the two went to
+// conflicts, or beside it for a memory note) count what it did. who is
+// the account it comes from.
+export function merge(from, to, conflicts, who = "", did = { moved: 0, dropped: 0, joined: 0, kept: 0 }) {
   fs.mkdirSync(to, { recursive: true })
   for (const e of fs.readdirSync(from, { withFileTypes: true })) {
     const src = path.join(from, e.name)
@@ -94,13 +141,18 @@ export function merge(from, to, conflicts, did = { moved: 0, dropped: 0, kept: 0
       continue
     }
     if (e.isDirectory() && there.isDirectory()) {
-      merge(src, dst, path.join(conflicts, e.name), did)
+      merge(src, dst, path.join(conflicts, e.name), who, did)
       fs.rmdirSync(src)
       continue
     }
     if (!e.isDirectory() && !there.isDirectory() && same(src, dst)) {
       fs.rmSync(src)
       did.dropped++
+      continue
+    }
+    if (!e.isDirectory() && !there.isDirectory() && inMemory(dst)) {
+      if (mergeMemory(src, dst, who) === "joined") did.joined++
+      else did.kept++
       continue
     }
     // two different things under one name: the newer stays shared
@@ -142,7 +194,7 @@ export function shareAccount(account, sharedDir, { quietMs = 10 * 60_000, now = 
           out.waiting.push(name)
           continue
         }
-        out.merged[name] = merge(link, target, path.join(sharedDir, "conflicts", account.id, name))
+        out.merged[name] = merge(link, target, path.join(sharedDir, "conflicts", account.id, name), account.id)
         fs.rmdirSync(link)
       }
       fs.symlinkSync(target, link, "junction")
@@ -153,4 +205,43 @@ export function shareAccount(account, sharedDir, { quietMs = 10 * 60_000, now = 
     }
   }
   return out
+}
+
+// resolveParked takes the memory notes 0.2.0 parked in conflicts/ (it
+// kept only the newest MEMORY.md of a project) into the shared memory as
+// merge does now. It returns how many it took; running it again finds
+// none.
+export function resolveParked(sharedDir) {
+  const root = path.join(sharedDir, "conflicts")
+  let n = 0
+  let accounts = []
+  try {
+    accounts = fs.readdirSync(root, { withFileTypes: true }).filter((e) => e.isDirectory())
+  } catch {
+    return 0
+  }
+  for (const acct of accounts) {
+    const base = path.join(root, acct.name, "projects")
+    const walk = (d, rel) => {
+      let es = []
+      try {
+        es = fs.readdirSync(d, { withFileTypes: true })
+      } catch {}
+      for (const e of es) {
+        const p = path.join(d, e.name)
+        const r = path.join(rel, e.name)
+        if (e.isDirectory()) walk(p, r)
+        else {
+          const dst = path.join(sharedDir, "projects", r)
+          if (!inMemory(dst)) continue
+          if (!fs.existsSync(dst)) fs.renameSync(p, dst)
+          else if (same(p, dst)) fs.rmSync(p)
+          else mergeMemory(p, dst, acct.name)
+          n++
+        }
+      }
+    }
+    walk(base, "")
+  }
+  return n
 }
