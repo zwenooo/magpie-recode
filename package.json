@@ -1,0 +1,26 @@
+{
+  "name": "magpie-plugin-reclaude",
+  "version": "0.1.0",
+  "description": "ReClaude accounts as magpie Library rows (claude#rec-<id>) that follow Claude Code's MCP servers, skills and instructions",
+  "type": "module",
+  "main": "index.js",
+  "files": [
+    "index.js",
+    "follow.js",
+    "README.md"
+  ],
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/zwenooo/magpie-plugins.git",
+    "directory": "packages/reclaude"
+  },
+  "magpie": {
+    "options": {
+      "recRoot": "",
+      "magpie": "",
+      "every": 5000,
+      "follow": true
+    }
+  }
+}
