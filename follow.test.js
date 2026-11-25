@@ -2,7 +2,7 @@ import { describe, expect, test, beforeEach, afterEach } from "bun:test"
 import fs from "node:fs"
 import os from "node:os"
 import path from "node:path"
-import { argsOf, followed, keepLinks, listAccounts, lock, plan, rowOf, samePath, Follower } from "./follow.js"
+import { argsOf, followed, keepLinks, listAccounts, lock, plan, rowOf, samePath, whyNot, Follower } from "./follow.js"
 
 let root, home, rec
 
@@ -172,4 +172,13 @@ test("a tick links, copies the ticks through magpie and syncs", async () => {
   expect(did.changes).toEqual([{ kind: "mcp", name: "m", agents: ["claude", "claude#rec-5"] }])
   expect(did.synced).toBe(true)
   expect(fs.readFileSync(calls, "utf8").trim().split(/\r?\n/)).toEqual(["library mcp agents m claude,claude#rec-5", "library sync"])
+})
+
+test("only magpie's own host follows, never one with CLAUDE_CONFIG_DIR set", () => {
+  const cfg = path.join(root, "cfg2")
+  fs.mkdirSync(cfg)
+  expect(whyNot({}, cfg)).toBe("not in magpie's config folder")
+  fs.writeFileSync(path.join(cfg, "library.json"), "{}")
+  expect(whyNot({}, cfg)).toBe("")
+  expect(whyNot({ CLAUDE_CONFIG_DIR: path.join(rec, "1", "config") }, cfg)).toContain("CLAUDE_CONFIG_DIR is set")
 })

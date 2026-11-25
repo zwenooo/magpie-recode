@@ -290,6 +290,19 @@ export function lock(dir, staleMs = 5 * 60_000, again = true) {
   return () => fs.rmSync(dir, { recursive: true, force: true })
 }
 
+// whyNot is why this process mustn't follow, "" when it may. magpie's
+// claude row is the folder CLAUDE_CONFIG_DIR names when it is set (a
+// magpie command typed in a terminal of a ReClaude account's session has
+// it): such a magpie, and every magpie command it would run, takes that
+// account for Claude Code, and would copy the wrong ticks. Only a process
+// working in magpie's config folder (the plugin host's) follows: another
+// program that loads the plugin (a page plugin's scan) doesn't.
+export function whyNot(env, configDir) {
+  if (env.CLAUDE_CONFIG_DIR) return `CLAUDE_CONFIG_DIR is set (${env.CLAUDE_CONFIG_DIR}): not following in this magpie`
+  if (!isFile(path.join(configDir, "library.json"))) return "not in magpie's config folder"
+  return ""
+}
+
 // Follower runs a tick every so often. Options:
 //   recRoot   ReClaude's accounts folder (~/.rec/claude/accounts)
 //   home      the home folder the junctions go in (os.homedir())
