@@ -8,8 +8,8 @@
 // becomes the row claude#rec-<id>.
 //
 // A new row is ticked for nothing. So each row gets the claude row's
-// ticks (MCP servers, skills, instructions) through magpie's own command
-// line, and then magpie writes the Library into it. This has to be done
+// ticks (MCP servers, skills, instructions) in magpie's library.json,
+// and then magpie's own command line writes the Library into it. This has to be done
 // before the account's first Claude Code session: Claude Code reads its
 // MCP servers once, when a session starts.
 
@@ -189,20 +189,59 @@ export function plan(lib, rows, recRoot, home = os.homedir()) {
   return out
 }
 
-// argsOf is the magpie command line that makes a change.
-export function argsOf(c) {
-  const list = c.agents.length ? c.agents.join(",") : "none"
-  if (c.kind === "instructions") return ["library", "instructions", "agents", list]
-  return ["library", c.kind, "agents", c.name, list]
+// applyTo makes changes in lib, as plan made them of it.
+export function applyTo(lib, changes) {
+  for (const c of changes) {
+    if (c.kind === "instructions") {
+      lib.instructions.agents = c.agents
+      continue
+    }
+    const list = c.kind === "mcp" ? lib.mcp : lib.skills
+    const s = list.find((x) => x?.name === c.name)
+    if (s) s.agents = c.agents
+  }
+  return lib
 }
 
-export function readLibrary(configDir) {
+// writeFollowed makes the rows follow the claude row in library.json
+// itself and says what it changed: [] when nothing needed to, null when
+// it couldn't now (unreadable, or written by magpie meanwhile: next
+// time). magpie has no lock on the file between its own processes either
+// (the window's and a command's), so this does what they do: read,
+// change, write. It writes a file beside it and renames that over it,
+// and only while the file is still what it read, so a write of magpie's
+// between the two is never lost, and nothing reads it half-written.
+//
+// magpie's command line could change each list instead, but each of its
+// commands looks over every agent first (WSL's among them): 30 seconds
+// to 3 minutes each on the computer this was written on, and a new
+// account means one per MCP server and skill.
+export function writeFollowed(configDir, rows, recRoot, home) {
+  const file = path.join(configDir, "library.json")
+  let text
+  let lib
   try {
-    return JSON.parse(fs.readFileSync(path.join(configDir, "library.json"), "utf8"))
+    text = fs.readFileSync(file, "utf8")
+    lib = JSON.parse(text)
   } catch {
-    // missing, or half-written by magpie this moment: next time
     return null
   }
+  const changes = plan(lib, rows, recRoot, home)
+  if (changes.length === 0) return []
+  applyTo(lib, changes)
+  const tmp = `${file}.reclaude-${process.pid}.tmp`
+  try {
+    fs.writeFileSync(tmp, JSON.stringify(lib, null, 2))
+    if (fs.readFileSync(file, "utf8") !== text) {
+      fs.rmSync(tmp, { force: true })
+      return null
+    }
+    fs.renameSync(tmp, file)
+  } catch {
+    fs.rmSync(tmp, { force: true })
+    return null
+  }
+  return changes
 }
 
 export function run(magpie, args, timeout = 120_000) {
@@ -308,7 +347,7 @@ export function whyNot(env, configDir) {
 //   home      the home folder the junctions go in (os.homedir())
 //   configDir magpie's config folder, which has library.json (the host's
 //             working folder)
-//   magpie    the magpie command to run (found by itself)
+//   magpie    the magpie command that syncs (found by itself)
 //   every     milliseconds between ticks (5000)
 //   follow    false: junctions only, no ticks copied
 export class Follower {
@@ -321,6 +360,7 @@ export class Follower {
     this.follow = o.follow !== false
     this.log = o.log || ((m) => console.error(`[reclaude] ${m}`))
     this.lockDir = o.lockDir || path.join(os.tmpdir(), "magpie-reclaude.lock")
+    this.owedFile = o.owedFile || path.join(path.dirname(this.lockDir), path.basename(this.lockDir) + ".sync-owed")
     this.failures = 0
     this.holdUntil = 0
     this.said = new Set()
@@ -369,37 +409,35 @@ export class Follower {
     for (const id of links.made) this.log(`linked ${path.join(this.home, LINK_PREFIX + id)} to account ${id}`)
     for (const id of links.removed) this.log(`removed ${path.join(this.home, LINK_PREFIX + id)}: account ${id} is gone`)
     const did = { made: links.made, removed: links.removed, changes: [], synced: false }
-    if (!this.follow || Date.now() < this.holdUntil) return did
-    const lib = readLibrary(this.configDir)
-    if (!lib) return did
+    if (!this.follow) return did
     const linked = new Set(links.linked)
     const rows = accounts.filter((a) => a.claude && linked.has(a.id)).map((a) => rowOf(a.id))
-    const changes = plan(lib, rows, this.recRoot, this.home)
-    if (changes.length === 0) return did
+    const changes = writeFollowed(this.configDir, rows, this.recRoot, this.home)
+    if (changes?.length) {
+      // a sync owed survives this process: a magpie command's host is
+      // ended when the command is, maybe before its sync ran
+      fs.writeFileSync(this.owedFile, String(Date.now()))
+      did.changes = changes
+      this.log(`${changes.length} Library list(s) now follow Claude Code (${rows.length} account(s))`)
+    }
+    if (!fs.existsSync(this.owedFile) || Date.now() < this.holdUntil) return did
     if (!this.magpie) this.magpie = await findMagpie(this.magpieGiven)
     if (!this.magpie) {
       this.say("can't find magpie's command line: set the plugin's option magpie to its path")
       this.hold()
       return did
     }
-    for (const c of changes) {
-      const r = await run(this.magpie, argsOf(c))
-      if (!r.ok) {
-        this.log(`magpie ${argsOf(c).join(" ")} failed: ${r.out}`)
-        this.hold()
-        return did
-      }
-      did.changes.push(c)
-    }
-    const r = await run(this.magpie, ["library", "sync"])
+    const started = Date.now()
+    const r = await run(this.magpie, ["library", "sync"], 15 * 60_000)
     if (!r.ok) {
       this.log(`magpie library sync failed: ${r.out}`)
       this.hold()
       return did
     }
+    fs.rmSync(this.owedFile, { force: true })
     did.synced = true
     this.failures = 0
-    this.log(`${changes.length} Library list(s) now follow Claude Code (${rows.length} account(s)); synced`)
+    this.log(`magpie library sync done in ${Math.round((Date.now() - started) / 1000)}s`)
     return did
   }
 

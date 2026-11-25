@@ -1,6 +1,6 @@
 {
   "name": "magpie-plugin-reclaude",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "ReClaude accounts as magpie Library rows (claude#rec-<id>) that follow Claude Code's MCP servers, skills and instructions",
   "type": "module",
   "main": "index.js",

@@ -2,7 +2,7 @@ import { describe, expect, test, beforeEach, afterEach } from "bun:test"
 import fs from "node:fs"
 import os from "node:os"
 import path from "node:path"
-import { argsOf, followed, keepLinks, listAccounts, lock, plan, rowOf, samePath, whyNot, Follower } from "./follow.js"
+import { followed, keepLinks, listAccounts, lock, plan, rowOf, samePath, whyNot, writeFollowed, Follower } from "./follow.js"
 
 let root, home, rec
 
@@ -123,13 +123,6 @@ describe("following the claude row", () => {
       { kind: "mcp", name: "d", agents: ["claude", ...rows] },
       { kind: "instructions", name: "", agents: ["claude", ...rows] },
     ])
-    expect(got.map(argsOf)).toEqual([
-      ["library", "mcp", "agents", "b", "claude,codex,claude#rec-1,claude#rec-2"],
-      ["library", "mcp", "agents", "c", "codex"],
-      ["library", "mcp", "agents", "d", "claude,claude#rec-1,claude#rec-2"],
-      ["library", "instructions", "agents", "claude,claude#rec-1,claude#rec-2"],
-    ])
-    expect(argsOf({ kind: "skill", name: "s", agents: [] })).toEqual(["library", "skill", "agents", "s", "none"])
     expect(plan(null, rows, rec, home)).toEqual([])
   })
 })
@@ -154,24 +147,66 @@ test("one lock at a time, and a stale one is taken", () => {
   expect(lock(dir)).toBeTruthy()
 })
 
-test("a tick links, copies the ticks through magpie and syncs", async () => {
+test("library.json is changed in place, keeping all else, and left alone when nothing differs", () => {
+  account("1")
+  const cfg = path.join(root, "cfg3")
+  fs.mkdirSync(cfg)
+  const file = path.join(cfg, "library.json")
+  const lib = {
+    instructions: { agents: ["claude"], note: "x" },
+    mcp: [{ name: "m", transport: "http", url: "u", agents: ["claude", "codex"], env: { K: "<v>" } }],
+    skills: [{ name: "s", agents: ["codex"] }],
+    applied: { claude: { mcp: ["magpie"] } },
+    mcpHub: true,
+  }
+  fs.writeFileSync(file, JSON.stringify(lib, null, 2))
+  const rows = [rowOf("1")]
+  const got = writeFollowed(cfg, rows, rec, home)
+  expect(got.map((c) => c.kind + ":" + c.name)).toEqual(["mcp:m", "instructions:"])
+  const after = JSON.parse(fs.readFileSync(file, "utf8"))
+  expect(after).toEqual({
+    ...lib,
+    instructions: { agents: ["claude", "claude#rec-1"], note: "x" },
+    mcp: [{ ...lib.mcp[0], agents: ["claude", "codex", "claude#rec-1"] }],
+  })
+  const st = fs.statSync(file).mtimeMs
+  expect(writeFollowed(cfg, rows, rec, home)).toEqual([])
+  expect(fs.statSync(file).mtimeMs).toBe(st)
+  expect(fs.readdirSync(cfg)).toEqual(["library.json"])
+  // unreadable: nothing written, next time
+  fs.writeFileSync(file, "{half")
+  expect(writeFollowed(cfg, rows, rec, home)).toBe(null)
+  expect(fs.readFileSync(file, "utf8")).toBe("{half")
+})
+
+test("a tick links, writes the ticks and syncs once, and a sync owed survives the process", async () => {
   account("5")
   account("6", []) // not signed in yet: linked, not ticked
   const cfg = path.join(root, "cfg")
   fs.mkdirSync(cfg)
-  fs.writeFileSync(path.join(cfg, "library.json"), JSON.stringify({ mcp: [{ name: "m", agents: ["claude"] }], skills: [], instructions: { agents: [] } }))
+  fs.writeFileSync(path.join(cfg, "library.json"), JSON.stringify({ mcp: [{ name: "m", agents: ["claude"] }], skills: [{ name: "s", agents: ["claude"] }], instructions: { agents: [] } }))
   // a fake magpie that records its arguments
   const calls = path.join(root, "calls.txt")
   const fake = path.join(root, process.platform === "win32" ? "magpie.cmd" : "magpie")
   if (process.platform === "win32") fs.writeFileSync(fake, `@echo %*>>"${calls}"\r\n`)
   else fs.writeFileSync(fake, `#!/bin/sh\necho "$@" >> "${calls}"\n`, { mode: 0o755 })
-  const logs = []
-  const f = new Follower({ home, recRoot: rec, configDir: cfg, magpie: fake, lockDir: path.join(root, "l"), log: (m) => logs.push(m) })
-  const did = await f.once()
+  const o = { home, recRoot: rec, configDir: cfg, magpie: fake, lockDir: path.join(root, "l"), log: () => {} }
+  const did = await new Follower(o).once()
   expect(did.made.sort()).toEqual(["5", "6"])
-  expect(did.changes).toEqual([{ kind: "mcp", name: "m", agents: ["claude", "claude#rec-5"] }])
+  expect(did.changes.map((c) => c.name)).toEqual(["m", "s"])
   expect(did.synced).toBe(true)
-  expect(fs.readFileSync(calls, "utf8").trim().split(/\r?\n/)).toEqual(["library mcp agents m claude,claude#rec-5", "library sync"])
+  const lib = JSON.parse(fs.readFileSync(path.join(cfg, "library.json"), "utf8"))
+  expect(lib.mcp[0].agents).toEqual(["claude", "claude#rec-5"])
+  expect(lib.skills[0].agents).toEqual(["claude", "claude#rec-5"])
+  expect(fs.readFileSync(calls, "utf8").trim().split(/\r?\n/)).toEqual(["library sync"])
+
+  // nothing to change, nothing owed: no sync
+  expect((await new Follower(o).once()).synced).toBe(false)
+  // a sync owed by a process that ended before it ran is run by the next
+  fs.writeFileSync(path.join(root, "l.sync-owed"), "1")
+  expect((await new Follower(o).once()).synced).toBe(true)
+  expect(fs.existsSync(path.join(root, "l.sync-owed"))).toBe(false)
+  expect(fs.readFileSync(calls, "utf8").trim().split(/\r?\n/)).toEqual(["library sync", "library sync"])
 })
 
 test("only magpie's own host follows, never one with CLAUDE_CONFIG_DIR set", () => {
