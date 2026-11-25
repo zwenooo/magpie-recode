@@ -2,7 +2,7 @@ import { describe, expect, test, beforeEach, afterEach } from "bun:test"
 import fs from "node:fs"
 import os from "node:os"
 import path from "node:path"
-import { followed, keepLinks, listAccounts, lock, plan, rowOf, samePath, whyNot, writeFollowed, Follower } from "./follow.js"
+import { followed, isFork, keepLinks, listAccounts, lock, plan, rowOf, samePath, whyNot, writeFollowed, Follower } from "./follow.js"
 
 let root, home, rec
 
@@ -187,9 +187,7 @@ test("a tick links, writes the ticks and syncs once, and a sync owed survives th
   fs.writeFileSync(path.join(cfg, "library.json"), JSON.stringify({ mcp: [{ name: "m", agents: ["claude"] }], skills: [{ name: "s", agents: ["claude"] }], instructions: { agents: [] } }))
   // a fake magpie that records its arguments
   const calls = path.join(root, "calls.txt")
-  const fake = path.join(root, process.platform === "win32" ? "magpie.cmd" : "magpie")
-  if (process.platform === "win32") fs.writeFileSync(fake, `@echo %*>>"${calls}"\r\n`)
-  else fs.writeFileSync(fake, `#!/bin/sh\necho "$@" >> "${calls}"\n`, { mode: 0o755 })
+  const fake = fakeMagpie(calls, "magpie 0.1.4800")
   const o = { home, recRoot: rec, configDir: cfg, magpie: fake, lockDir: path.join(root, "l"), log: () => {} }
   const did = await new Follower(o).once()
   expect(did.made.sort()).toEqual(["5", "6"])
@@ -198,7 +196,7 @@ test("a tick links, writes the ticks and syncs once, and a sync owed survives th
   const lib = JSON.parse(fs.readFileSync(path.join(cfg, "library.json"), "utf8"))
   expect(lib.mcp[0].agents).toEqual(["claude", "claude#rec-5"])
   expect(lib.skills[0].agents).toEqual(["claude", "claude#rec-5"])
-  expect(fs.readFileSync(calls, "utf8").trim().split(/\r?\n/)).toEqual(["library sync"])
+  expect(fs.readFileSync(calls, "utf8").trim().split(/\r?\n/)).toEqual(["--version", "library sync"])
 
   // nothing to change, nothing owed: no sync
   expect((await new Follower(o).once()).synced).toBe(false)
@@ -206,7 +204,34 @@ test("a tick links, writes the ticks and syncs once, and a sync owed survives th
   fs.writeFileSync(path.join(root, "l.sync-owed"), "1")
   expect((await new Follower(o).once()).synced).toBe(true)
   expect(fs.existsSync(path.join(root, "l.sync-owed"))).toBe(false)
-  expect(fs.readFileSync(calls, "utf8").trim().split(/\r?\n/)).toEqual(["library sync", "library sync"])
+  expect(fs.readFileSync(calls, "utf8").trim().split(/\r?\n/).filter((l) => l !== "--version")).toEqual(["library sync", "library sync"])
+})
+
+function fakeMagpie(calls, version) {
+  const fake = path.join(path.dirname(calls), process.platform === "win32" ? "magpie.cmd" : "magpie")
+  if (process.platform === "win32") fs.writeFileSync(fake, `@echo %*>>"${calls}"\r\n@if "%1"=="--version" echo ${version}\r\n`)
+  else fs.writeFileSync(fake, `#!/bin/sh\necho "$@" >> "${calls}"\n[ "$1" = --version ] && echo "${version}"\nexit 0\n`, { mode: 0o755 })
+  return fake
+}
+
+test("on the zwenooo/magpie fork it does nothing at all", async () => {
+  expect(isFork("magpie 0.1.4728-vb.0.0.3")).toBe(true)
+  expect(isFork("magpie 0.1.4800")).toBe(false)
+  expect(isFork("magpie dev")).toBe(false)
+  account("7")
+  const cfg = path.join(root, "cfg4")
+  fs.mkdirSync(cfg)
+  fs.writeFileSync(path.join(cfg, "library.json"), JSON.stringify({ mcp: [{ name: "m", agents: ["claude"] }] }))
+  const calls = path.join(root, "calls4.txt")
+  const logs = []
+  const f = new Follower({ home, recRoot: rec, configDir: cfg, magpie: fakeMagpie(calls, "magpie 0.1.4728-vb.0.0.3"), lockDir: path.join(root, "l4"), log: (m) => logs.push(m) })
+  const did = await f.once()
+  await f.once()
+  expect(did).toEqual({ made: [], removed: [], changes: [], synced: false })
+  expect(fs.existsSync(path.join(home, ".claude-rec-7"))).toBe(false)
+  expect(fs.readFileSync(calls, "utf8").trim().split(/\r?\n/)).toEqual(["--version"])
+  expect(logs).toHaveLength(1)
+  expect(logs[0]).toContain("zwenooo/magpie fork")
 })
 
 test("only magpie's own host follows, never one with CLAUDE_CONFIG_DIR set", () => {

@@ -329,6 +329,11 @@ export function lock(dir, staleMs = 5 * 60_000, again = true) {
   return () => fs.rmSync(dir, { recursive: true, force: true })
 }
 
+// isFork is whether a magpie --version line is the zwenooo/magpie fork's.
+export function isFork(version) {
+  return /^magpie \S*-vb\.\S*/.test(version)
+}
+
 // whyNot is why this process mustn't follow, "" when it may. magpie's
 // claude row is the folder CLAUDE_CONFIG_DIR names when it is set (a
 // magpie command typed in a terminal of a ReClaude account's session has
@@ -403,6 +408,11 @@ export class Follower {
   // once does one tick's work and says what it did: {made, removed,
   // changes, synced}.
   async once() {
+    if (this.refused === undefined) this.refused = await this.refuses()
+    if (this.refused) {
+      this.say(this.refused)
+      return { made: [], removed: [], changes: [], synced: false }
+    }
     const accounts = listAccounts(this.recRoot)
     const links = keepLinks(this.home, this.recRoot, accounts)
     for (const p of links.problems) this.say(p)
@@ -439,6 +449,19 @@ export class Follower {
     this.failures = 0
     this.log(`magpie library sync done in ${Math.round((Date.now() - started) / 1000)}s`)
     return did
+  }
+
+  // refuses is why this magpie is no place for the plugin, "" when it
+  // is. The zwenooo/magpie fork (versions …-vb.…) makes a row of each
+  // ReClaude account itself and follows Claude Code for it: beside the
+  // junctions it made every account a second row, claude#rec-<id>-2, on
+  // the same folder (2026-11-25).
+  async refuses() {
+    if (!this.magpie) this.magpie = await findMagpie(this.magpieGiven)
+    if (!this.magpie) return ""
+    const r = await run(this.magpie, ["--version"], 30_000)
+    const v = r.ok ? r.out.split(/\r?\n/)[0].trim() : ""
+    return isFork(v) ? `${v} is the zwenooo/magpie fork, which follows ReClaude's accounts itself: this plugin does nothing there` : ""
   }
 
   // hold waits a minute after a failure, doubled each time up to 30.

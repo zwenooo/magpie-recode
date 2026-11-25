@@ -4,7 +4,9 @@
 并且跟随 Claude Code（`claude` 行）的 MCP server、skill 和说明。换了新的
 ReClaude 账号，第一次开 Claude 会话前就已经有 magpie 的 hub。
 
-只用 magpie 官方的功能，不需要改 magpie。
+只用 magpie 官方的功能，不需要改 magpie。**只用于官方版 magpie**：在 zwenooo/magpie
+fork（版本号带 `-vb.`）上它什么都不做，因为 fork 自己会为每个账号建一行，再加
+junction 会让每个账号变成两行。
 
 ## 做什么
 
@@ -40,7 +42,7 @@ Sessions 页也会读到这些账号的对话：magpie 会读家目录下每个 
 在 magpie 的插件页添加，或者：
 
 ```sh
-magpie plugin add github:zwenooo/magpie-plugins#reclaude-v0.1.1
+magpie plugin add github:zwenooo/magpie-plugins#reclaude-v0.1.2
 ```
 
 ## 选项
