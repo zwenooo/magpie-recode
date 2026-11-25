@@ -37,6 +37,25 @@ junction 会让每个账号变成两行。
 Sessions 页也会读到这些账号的对话：magpie 会读家目录下每个 `.claude…` 文件夹
 里的 `projects/`。
 
+## 共享会话（可选，`shareSessions`）
+
+Claude Code 只在当前账号的 `projects/` 里找可以 `/resume` 的会话，所以换了 rec 账号
+就接不上原来账号里的对话。打开 `shareSessions` 后，每个账号的 `projects/`（会话）和
+`file-history/`（`/rewind` 用的检查点）都换成指向同一个共享文件夹的 junction
+（默认 `~/.rec-sessions/`），任何账号里 `/resume` 都能看到所有账号的对话。
+
+- 新账号：在它第一次开会话前就建好 junction。
+- 已有账号：先把它的文件并进共享文件夹，再换成 junction。只在这个账号 10 分钟
+  （`quietMinutes`）没有写入时做，避免搬动正在写的会话；忙着的账号每分钟再看一次。
+  在同一个盘里移动，已经打开的文件句柄会跟着走。
+- 什么都不删：共享文件夹里已有同名文件时，内容一样就只留一份；不一样就留较新的，
+  另一份放到 `~/.rec-sessions/conflicts/<账号>/…`。
+- 共享文件夹的名字不以 `claude` 开头，magpie 不会把它当成又一个 Claude Code。
+  magpie 的 Sessions 按会话 id 去重，同一份会话经 13 个账号读到也只算一次。
+- 同一个对话不要同时在两个账号里开着继续聊，它们会写同一个文件。
+- 关掉选项不会把文件搬回去。要退回：删掉账号里的 `projects`、`file-history`
+  junction（只删链接本身），再把共享文件夹的内容复制回需要的账号。
+
 ## 安装
 
 在 magpie 的插件页添加 `github:zwenooo/magpie-reclaude`，或者：
@@ -55,6 +74,9 @@ magpie plugin add github:zwenooo/magpie-reclaude
 | `magpie` | 自动找 | magpie 命令行的路径。默认用启动插件宿主的那个 magpie 旁边的 `magpie.com`（Windows）或 `magpie`，找不到再用 PATH 里的 |
 | `every` | `5000` | 多少毫秒检查一次 |
 | `follow` | `true` | `false` 时只建 junction，不改勾选 |
+| `shareSessions` | `false` | `true`：所有账号共用一个会话文件夹，见上 |
+| `sharedDir` | `~/.rec-sessions` | 共享文件夹 |
+| `quietMinutes` | `10` | 已有账号多久没写入才合并 |
 
 ## 注意
 

@@ -17,6 +17,7 @@ import fs from "node:fs"
 import os from "node:os"
 import path from "node:path"
 import { execFile } from "node:child_process"
+import { shareAccount } from "./share.js"
 
 const LINK_PREFIX = ".claude-rec-"
 const ROW_PREFIX = "claude#rec-"
@@ -363,6 +364,11 @@ export class Follower {
     this.magpieGiven = o.magpie || ""
     this.every = Math.max(1000, Number(o.every) || 5000)
     this.follow = o.follow !== false
+    // every account's sessions in one folder (share.js); off unless asked
+    this.share = o.shareSessions === true
+    this.sharedDir = o.sharedDir || path.join(this.home, ".rec-sessions")
+    this.quietMs = Math.max(0, Number(o.quietMinutes ?? 10)) * 60_000
+    this.shareNext = new Map() // account id → when to look at it again
     this.log = o.log || ((m) => console.error(`[reclaude] ${m}`))
     this.lockDir = o.lockDir || path.join(os.tmpdir(), "magpie-reclaude.lock")
     this.owedFile = o.owedFile || path.join(path.dirname(this.lockDir), path.basename(this.lockDir) + ".sync-owed")
@@ -418,6 +424,7 @@ export class Follower {
     for (const p of links.problems) this.say(p)
     for (const id of links.made) this.log(`linked ${path.join(this.home, LINK_PREFIX + id)} to account ${id}`)
     for (const id of links.removed) this.log(`removed ${path.join(this.home, LINK_PREFIX + id)}: account ${id} is gone`)
+    if (this.share) this.shareSessions(accounts)
     const did = { made: links.made, removed: links.removed, changes: [], synced: false }
     if (!this.follow) return did
     const linked = new Set(links.linked)
@@ -462,6 +469,23 @@ export class Follower {
     const r = await run(this.magpie, ["--version"], 30_000)
     const v = r.ok ? r.out.split(/\r?\n/)[0].trim() : ""
     return isFork(v) ? `${v} is the zwenooo/magpie fork, which follows ReClaude's accounts itself: this plugin does nothing there` : ""
+  }
+
+  // shareSessions links each account's sessions into the shared folder;
+  // an account busy with a session is looked at again a minute later.
+  shareSessions(accounts) {
+    const now = Date.now()
+    for (const a of accounts) {
+      if ((this.shareNext.get(a.id) ?? 0) > now) continue
+      const r = shareAccount(a, this.sharedDir, { quietMs: this.quietMs, now })
+      for (const p of r.problems) this.say(p)
+      for (const [name, did] of Object.entries(r.merged)) {
+        this.log(`account ${a.id}: ${name} merged into ${path.join(this.sharedDir, name)} (${did.moved} moved, ${did.dropped} the same already there, ${did.kept} kept apart in conflicts)`)
+      }
+      for (const name of r.linked) this.log(`account ${a.id}: ${name} now shared`)
+      if (r.waiting.length || r.problems.length) this.shareNext.set(a.id, now + 60_000)
+      else this.shareNext.set(a.id, now + 5 * 60_000)
+    }
   }
 
   // hold waits a minute after a failure, doubled each time up to 30.
