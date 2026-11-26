@@ -18,6 +18,7 @@ import os from "node:os"
 import path from "node:path"
 import { execFile } from "node:child_process"
 import { resolveParked, shareAccount } from "./share.js"
+import { followClaudeMd } from "./claudemd.js"
 
 const LINK_PREFIX = ".claude-rec-"
 const ROW_PREFIX = "claude#rec-"
@@ -341,10 +342,12 @@ export function isFork(version) {
 // it): such a magpie, and every magpie command it would run, takes that
 // account for Claude Code, and would copy the wrong ticks. Only a process
 // working in magpie's config folder (the plugin host's) follows: another
-// program that loads the plugin (a page plugin's scan) doesn't.
+// program that loads the plugin (a page plugin's scan) doesn't. The folder
+// is known by its plugins.json, which lists this plugin, or library.json:
+// a magpie whose Library was never used has none of the latter yet.
 export function whyNot(env, configDir) {
   if (env.CLAUDE_CONFIG_DIR) return `CLAUDE_CONFIG_DIR is set (${env.CLAUDE_CONFIG_DIR}): not following in this magpie`
-  if (!isFile(path.join(configDir, "library.json"))) return "not in magpie's config folder"
+  if (!isFile(path.join(configDir, "library.json")) && !isFile(path.join(configDir, "plugins.json"))) return "not in magpie's config folder"
   return ""
 }
 
@@ -356,6 +359,7 @@ export function whyNot(env, configDir) {
 //   magpie    the magpie command that syncs (found by itself)
 //   every     milliseconds between ticks (5000)
 //   follow    false: junctions only, no ticks copied
+//   followClaudeMd  false: accounts' CLAUDE.md left alone (claudemd.js)
 export class Follower {
   constructor(o = {}) {
     this.home = o.home || os.homedir()
@@ -369,7 +373,22 @@ export class Follower {
     this.sharedDir = o.sharedDir || path.join(this.home, ".rec-sessions")
     this.quietMs = Math.max(0, Number(o.quietMinutes ?? 10)) * 60_000
     this.shareNext = new Map() // account id → when to look at it again
-    this.log = o.log || ((m) => console.error(`[recode] ${m}`))
+    this.shareWaiting = new Map() // account id → folders left for later
+    this.followMd = o.followClaudeMd !== false
+    this.mainMd = o.mainMd || path.join(this.home, ".claude", "CLAUDE.md")
+    this.mdState = o.mdState || path.join(this.sharedDir, "claude-md.json")
+    this.backupDir = o.backupDir || path.join(this.sharedDir, "backups")
+    // what the panel shows of this follower (status)
+    this.events = []
+    this.lastTick = null
+    this.lastSync = null
+    this.syncing = false
+    const out = o.log || ((m) => console.error(`[recode] ${m}`))
+    this.log = (m) => {
+      this.events.push({ at: Date.now(), msg: String(m) })
+      if (this.events.length > 200) this.events.splice(0, this.events.length - 200)
+      out(m)
+    }
     this.lockDir = o.lockDir || path.join(os.tmpdir(), "magpie-reclaude.lock")
     this.owedFile = o.owedFile || path.join(path.dirname(this.lockDir), path.basename(this.lockDir) + ".sync-owed")
     this.failures = 0
@@ -399,15 +418,47 @@ export class Follower {
     clearInterval(this.timer)
   }
 
+  // tick does once's work unless another tick, of this process or
+  // another, is doing it; it says whether it did.
   async tick() {
-    if (this.busy) return
+    if (this.busy) return false
     this.busy = true
     const release = lock(this.lockDir)
     try {
-      if (release) await this.once()
+      if (!release) return false
+      await this.once()
+      this.lastTick = Date.now()
+      return true
     } finally {
       release?.()
       this.busy = false
+    }
+  }
+
+  // syncNow has the next tick run magpie library sync, and starts it:
+  // the panel's Sync now. A sync held back after a failure goes now.
+  async syncNow() {
+    fs.writeFileSync(this.owedFile, String(Date.now()))
+    this.holdUntil = 0
+    return this.tick()
+  }
+
+  // status is what the panel shows of this follower.
+  status() {
+    return {
+      refused: this.refused || "",
+      magpie: this.magpie || "",
+      every: this.every,
+      follow: this.follow,
+      share: this.share,
+      followMd: this.followMd,
+      busy: !!this.busy,
+      syncing: this.syncing,
+      owed: fs.existsSync(this.owedFile),
+      holdUntil: this.holdUntil > Date.now() ? this.holdUntil : null,
+      lastTick: this.lastTick,
+      lastSync: this.lastSync,
+      events: this.events.slice(-100),
     }
   }
 
@@ -425,6 +476,7 @@ export class Follower {
     for (const id of links.made) this.log(`linked ${path.join(this.home, LINK_PREFIX + id)} to account ${id}`)
     for (const id of links.removed) this.log(`removed ${path.join(this.home, LINK_PREFIX + id)}: account ${id} is gone`)
     if (this.share) this.shareSessions(accounts)
+    if (this.followMd) this.followClaudeMd(accounts)
     const did = { made: links.made, removed: links.removed, changes: [], synced: false }
     if (!this.follow) return did
     const linked = new Set(links.linked)
@@ -445,7 +497,14 @@ export class Follower {
       return did
     }
     const started = Date.now()
-    const r = await run(this.magpie, ["library", "sync"], 15 * 60_000)
+    this.syncing = true
+    let r
+    try {
+      r = await run(this.magpie, ["library", "sync"], 15 * 60_000)
+    } finally {
+      this.syncing = false
+    }
+    this.lastSync = { at: Date.now(), ok: r.ok, ms: Date.now() - started, out: r.ok ? "" : r.out.slice(-2000) }
     if (!r.ok) {
       this.log(`magpie library sync failed: ${r.out}`)
       this.hold()
@@ -456,6 +515,17 @@ export class Follower {
     this.failures = 0
     this.log(`magpie library sync done in ${Math.round((Date.now() - started) / 1000)}s`)
     return did
+  }
+
+  // followClaudeMd makes every account's CLAUDE.md Claude Code's
+  // (claudemd.js).
+  followClaudeMd(accounts) {
+    const r = followClaudeMd({ main: this.mainMd, accounts: accounts.filter((a) => a.claude), stateFile: this.mdState, backupDir: this.backupDir })
+    for (const p of r.problems) this.say(`CLAUDE.md: ${p}`)
+    for (const [id, ls] of Object.entries(r.joined)) this.log(`account ${id}: ${ls.length} line(s) it added to CLAUDE.md joined into ${this.mainMd}`)
+    for (const [id, f] of Object.entries(r.backedUp)) this.log(`account ${id}: its CLAUDE.md kept as ${f} before it was replaced`)
+    if (r.written.length) this.log(`CLAUDE.md written into account(s) ${r.written.join(", ")}`)
+    return r
   }
 
   // refuses is why this magpie is no place for the plugin, "" when it
@@ -492,6 +562,8 @@ export class Follower {
         this.log(`account ${a.id}: ${name} merged into ${path.join(this.sharedDir, name)} (${did.moved} moved, ${did.dropped} the same already there, ${did.joined} memory index(es) joined, ${did.kept} kept apart)`)
       }
       for (const name of r.linked) this.log(`account ${a.id}: ${name} now shared`)
+      if (r.waiting.length) this.shareWaiting.set(a.id, r.waiting)
+      else this.shareWaiting.delete(a.id)
       if (r.waiting.length || r.problems.length) this.shareNext.set(a.id, now + 60_000)
       else this.shareNext.set(a.id, now + 5 * 60_000)
     }

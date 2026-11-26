@@ -3,7 +3,7 @@
 <img src="https://www.recode.cat/logo/logo-single.svg" width="48" alt="ReCode">
 
 让 [ReCode](https://www.recode.cat)（ReClaude）的每个账号在 magpie 的 Library 里成为一行 `claude#rec-<id>`，
-并且跟随 Claude Code（`claude` 行）的 MCP server、skill 和说明。换了新的
+并且跟随 Claude Code（`claude` 行）的 MCP server、skill、说明和 `CLAUDE.md`。换了新的
 ReCode 账号，第一次开 Claude 会话前就已经有 magpie 的 hub。
 
 只用 magpie 官方的功能，不需要改 magpie。**只用于官方版 magpie**：在 zwenooo/magpie
@@ -38,6 +38,44 @@ junction 会让每个账号变成两行。
 
 Sessions 页也会读到这些账号的对话：magpie 会读家目录下每个 `.claude…` 文件夹
 里的 `projects/`。
+
+## CLAUDE.md（`followClaudeMd`，默认开）
+
+每个账号的 `CLAUDE.md`（Claude Code 的用户说明，也是 `#` 记下的东西所在）和
+`~/.claude/CLAUDE.md` 保持一样。magpie 的 Library 只写它自己那段（说明集，两行标记之间），
+而且只在用了说明集时才写，所以 `~/.claude/CLAUDE.md` 里你自己写的内容原先到不了各个账号：
+早建的账号停在旧版本，新建的账号干脆没有。
+
+- 每次检查时，把 `~/.claude/CLAUDE.md` 复制到每个账号。
+- 某个账号自上次写入后新加的行（比如在那个账号的会话里让 Claude 记下的），先按行并进
+  `~/.claude/CLAUDE.md`，再发给所有账号。在账号里改掉或删掉的行会被改回来：要改就改
+  `~/.claude/CLAUDE.md`。
+- 第一次运行时，账号里原有的文件不是插件写的，可能是旧版本，所以直接换成新的，不并回去；
+  它有而新版本没有的内容，先存到 `<sharedDir>/backups/<账号>/CLAUDE-<时间>.md`。
+- 记录每个账号上次写入内容的文件是 `<sharedDir>/claude-md.json`。
+- `~/.claude/CLAUDE.md` 不存在时什么都不做。
+
+## 面板
+
+magpie 侧边栏「插件」下有「ReCode 面板」，逐个账号和 Claude Code（`~/.claude`）比较：
+
+| 列 | 看的是什么 |
+| --- | --- |
+| Library 勾选 | 这个账号行在 Library 里勾上的 MCP 和 skill，是否和 `claude` 行一样 |
+| MCP | 账号 `.claude.json` 里有没有 magpie hub（`/hub/claude%23rec-<id>`），比 Claude Code 多了或少了哪些 |
+| Skill | 账号 `skills/` 比 `~/.claude/skills` 少了或多了哪些；只在 `~/.claude/skills`、不在 Library 里的 skill 不会跟随，面板会标出来 |
+| CLAUDE.md | 和 `~/.claude/CLAUDE.md` 是否一样 |
+| 会话 · 项目记忆 | `projects`（会话和各项目的 `memory/`）、`file-history`（`/rewind` 检查点）是否链到共享文件夹 |
+
+点一行看细节（具体缺了、多了哪些，文件夹位置）。下面是 Claude Code 主配置、共享文件夹（会话数、
+记忆条数、冲突和备份文件，可以直接打开）、后台（上次检查、上次同步、欠着的同步）、选项和最近
+100 条日志。「立即检查」马上跑一次检查，「立即同步」马上运行 `magpie library sync`。
+
+MCP 只显示名字，不显示命令、地址、请求头和环境变量（里面可能有密钥）。
+
+面板是插件自己在 `127.0.0.1:3587`（选项 `port`）上起的小服务：magpie 的插件页面不能联网，
+页面打开后转到这个地址。只认 `127.0.0.1`/`localhost` 这个端口的访问，接口要带每次启动随机生成、
+只写在面板页面里的令牌，别的网页调不了。`magpie web` 从别的电脑打开时，magpie 会代为转发。
 
 ## 共享会话（可选，`shareSessions`）
 
@@ -87,6 +125,8 @@ magpie plugin add github:zwenooo/magpie-recode
 | `shareSessions` | `false` | `true`：所有账号共用一个会话文件夹，见上 |
 | `sharedDir` | `~/.rec-sessions` | 共享文件夹 |
 | `quietMinutes` | `10` | 已有账号多久没写入才合并 |
+| `followClaudeMd` | `true` | `false` 时不动各账号的 `CLAUDE.md`，见上 |
+| `port` | `3587` | 面板服务的端口，被占用时改它 |
 
 ## 注意
 

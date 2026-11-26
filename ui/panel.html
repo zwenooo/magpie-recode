@@ -1,0 +1,391 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>ReCode 面板</title>
+<style>
+  :root {
+    --bg: #f6f6f7; --card: #fff; --fg: #1c1c1e; --muted: #6b7280; --faint: #9ca3af; --line: #e5e7eb;
+    --accent: #0f766e; --accent-soft: #e6f2f1; --green: #16a34a; --red: #dc2626; --amber: #d97706;
+    --font: -apple-system, BlinkMacSystemFont, "PingFang SC", "Segoe UI", system-ui, sans-serif;
+    --code: ui-monospace, "Cascadia Mono", Menlo, Consolas, monospace;
+    color-scheme: light;
+  }
+  :root.dark { color-scheme: dark; --bg: #1c1c1e; --card: #26262a; --fg: #ececf1; --muted: #a1a1aa; --faint: #71717a; --line: #3f3f46; --accent-soft: #1f3533; }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; background: var(--bg); color: var(--fg); font: 13px/1.5 var(--font); }
+  main { padding: 20px 24px 40px; max-width: 1280px; }
+  header { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+  header img { width: 22px; height: 22px; }
+  h1 { font-size: 16px; margin: 0; font-weight: 600; }
+  h2 { font-size: 13px; margin: 0 0 8px; font-weight: 600; }
+  .grow { flex: 1; }
+  .muted { color: var(--muted); }
+  .faint { color: var(--faint); }
+  code, .mono { font-family: var(--code); font-size: 12px; }
+  button { font: inherit; color: inherit; background: var(--card); border: 1px solid var(--line); border-radius: 7px; padding: 4px 12px; cursor: pointer; }
+  button:hover:not(:disabled) { border-color: var(--muted); }
+  button:disabled { opacity: .5; cursor: default; }
+  button.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-fg, #fff); }
+  button.link { border: 0; background: none; padding: 0 2px; color: var(--accent); }
+  .chip { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--muted); }
+  .dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; flex: none; background: var(--faint); }
+  .ok .dot, .dot.ok { background: var(--green); }
+  .warn .dot, .dot.warn { background: var(--amber); }
+  .bad .dot, .dot.bad { background: var(--red); }
+  .tiles { display: flex; flex-wrap: wrap; background: var(--card); border: 1px solid var(--line); border-radius: 10px; overflow: hidden; margin: 16px 0; }
+  .tile { flex: 1 1 130px; padding: 10px 14px; box-shadow: -1px 0 0 var(--line), 0 -1px 0 var(--line); }
+  .tile b { display: block; font-size: 18px; font-weight: 600; }
+  .tile span { font-size: 12px; color: var(--muted); }
+  section { margin-top: 22px; }
+  table { width: 100%; border-collapse: collapse; background: var(--card); border: 1px solid var(--line); border-radius: 10px; overflow: hidden; }
+  th, td { text-align: left; padding: 7px 10px; border-bottom: 1px solid var(--line); vertical-align: top; white-space: nowrap; }
+  th { font-weight: 500; color: var(--muted); font-size: 12px; background: var(--bg); }
+  tr.acct { cursor: pointer; }
+  tr.acct:hover td { background: var(--accent-soft); }
+  tr.detail td { white-space: normal; background: var(--bg); padding: 10px 14px 14px; }
+  .cell { display: inline-flex; align-items: center; gap: 6px; }
+  dl { display: grid; grid-template-columns: max-content 1fr; gap: 4px 16px; margin: 0; }
+  dt { color: var(--muted); }
+  dd { margin: 0; word-break: break-all; }
+  .names { display: flex; flex-wrap: wrap; gap: 4px; }
+  .names code { background: var(--card); border: 1px solid var(--line); border-radius: 5px; padding: 0 6px; }
+  .names code.miss { border-color: var(--red); color: var(--red); }
+  .names code.extra { border-color: var(--amber); color: var(--amber); }
+  .cols { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 16px; }
+  .box { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; }
+  .log { font-family: var(--code); font-size: 12px; white-space: pre-wrap; max-height: 320px; overflow: auto; margin: 0; background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; }
+  .say { margin-top: 10px; font-size: 12px; }
+  .say.err { color: var(--red); }
+  .tip { cursor: help; border-bottom: 1px dotted var(--faint); }
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <img src="icon.svg" alt="">
+    <h1>ReCode</h1>
+    <span id="state" class="chip"><span class="dot"></span><span>读取中…</span></span>
+    <span class="grow"></span>
+    <span id="at" class="faint"></span>
+    <button id="refresh">刷新</button>
+    <button id="check">立即检查</button>
+    <button id="sync" class="primary">立即同步</button>
+  </header>
+  <div id="say" class="say muted"></div>
+  <div id="tiles" class="tiles"></div>
+
+  <section>
+    <h2>账号 <span class="muted">· 和 Claude Code（主配置）比较，点一行看细节</span></h2>
+    <table>
+      <thead><tr>
+        <th>账号</th><th>最近使用</th>
+        <th><span class="tip" title="magpie Library 里，这个账号行勾上的 MCP 和 skill，和 claude 行一样多才算跟上">Library 勾选</span></th>
+        <th><span class="tip" title="账号 .claude.json 里的 MCP server：有没有 magpie hub，和 Claude Code 的比多了或少了哪些">MCP</span></th>
+        <th><span class="tip" title="账号 skills 文件夹里的 skill，和 ~/.claude/skills 比">Skill</span></th>
+        <th><span class="tip" title="账号的 CLAUDE.md（用户说明 / 记忆），和 ~/.claude/CLAUDE.md 比">CLAUDE.md</span></th>
+        <th><span class="tip" title="会话（projects，含各项目的记忆 memory/）和 /rewind 检查点（file-history）是否链到共享文件夹">会话 · 项目记忆</span></th>
+        <th></th>
+      </tr></thead>
+      <tbody id="rows"></tbody>
+    </table>
+  </section>
+
+  <section class="cols">
+    <div class="box" id="main"></div>
+    <div class="box" id="shared"></div>
+  </section>
+
+  <section class="cols">
+    <div class="box" id="runner"></div>
+    <div class="box" id="opts"></div>
+  </section>
+
+  <section>
+    <h2>日志 <span class="muted">· 最近 100 条，最新的在上面</span></h2>
+    <pre class="log" id="log"></pre>
+  </section>
+</main>
+<script>
+"use strict"
+const TOKEN = "__RECODE_TOKEN__"
+const $ = (id) => document.getElementById(id)
+const open = new Set()
+let last = null
+let timer = 0
+
+// the theme magpie's page handed over in the address
+try {
+  const m = /theme=([^&]+)/.exec(location.hash)
+  if (m) {
+    const t = JSON.parse(decodeURIComponent(m[1]))
+    if (t.dark) document.documentElement.classList.add("dark")
+    for (const [k, v] of Object.entries(t.tokens || {})) if (v) document.documentElement.style.setProperty("--" + k, v)
+  }
+} catch {}
+
+function el(tag, cls, text) {
+  const e = document.createElement(tag)
+  if (cls) e.className = cls
+  if (text !== undefined) e.textContent = text
+  return e
+}
+
+async function api(path, body) {
+  const r = await fetch(path, body === undefined
+    ? { headers: { "X-ReCode-Token": TOKEN } }
+    : { method: "POST", headers: { "X-ReCode-Token": TOKEN, "Content-Type": "application/json" }, body: JSON.stringify(body) })
+  const j = await r.json().catch(() => ({}))
+  if (!r.ok && r.status !== 202) throw new Error(j.error || `${r.status}`)
+  return j
+}
+
+function ago(ms) {
+  if (!ms) return "—"
+  const s = Math.round((Date.now() - ms) / 1000)
+  if (s < 60) return "刚刚"
+  if (s < 3600) return `${Math.floor(s / 60)} 分钟前`
+  if (s < 86400) return `${Math.floor(s / 3600)} 小时前`
+  return `${Math.floor(s / 86400)} 天前`
+}
+const when = (ms) => (ms ? new Date(ms).toLocaleString() : "—")
+
+// cell is a status dot and its words; kind ok, warn, bad or "" (grey)
+function cell(kind, text, tip) {
+  const c = el("span", "cell " + kind)
+  c.append(el("span", "dot"), el("span", "", text))
+  if (tip) c.title = tip
+  return c
+}
+
+function judge(a) {
+  const out = {}
+  out.link = a.link === "ok" ? null : cell("bad", a.link === "missing" ? "没有链接" : "名字被占用", `~/.claude-rec-${a.id} ${a.link === "missing" ? "不存在，magpie 看不到这个账号" : "是别的文件夹或链接，ReCode 没动它"}`)
+  const L = a.library
+  if (!L) out.library = cell("", "读不到 library.json")
+  else {
+    const full = L.mcp[0] === L.mcp[1] && L.skills[0] === L.skills[1] && L.instructions !== false
+    out.library = cell(full ? "ok" : "bad", full ? "已跟上" : `MCP ${L.mcp[0]}/${L.mcp[1]} · skill ${L.skills[0]}/${L.skills[1]}`, `MCP ${L.mcp[0]}/${L.mcp[1]}，skill ${L.skills[0]}/${L.skills[1]}${L.instructions === null ? "，说明：claude 行没用" : L.instructions ? "，说明已勾" : "，说明没勾"}`)
+  }
+  const M = a.mcp
+  if (!M) out.mcp = cell("bad", "读不了", "账号的 .claude.json 不是有效的 JSON")
+  else if (M.hub === "missing") out.mcp = cell("bad", "没有 hub", "magpie hub 没写进这个账号：新开的会话里没有 Library 的工具")
+  else if (M.hub === "bare") out.mcp = cell("warn", "裸 /hub", "hub 地址不带账号名，应为 /hub/" + a.row)
+  else if (M.hub === "other") out.mcp = cell("warn", "hub 名字不对", "hub 地址不是 /hub/" + a.row)
+  else if (M.missing.length) out.mcp = cell("bad", `缺 ${M.missing.length} 个`, "Claude Code 有、这个账号没有：" + M.missing.join(", "))
+  else if (M.extra.length) out.mcp = cell("warn", `多 ${M.extra.length} 个`, "直接写在账号里、Claude Code 没有的：" + M.extra.join(", ") + "。和 hub 里的同名工具重复")
+  else out.mcp = cell("ok", "一致")
+  const S = a.skills
+  out.skills = S.missing.length ? cell("bad", `缺 ${S.missing.length} 个`, "Claude Code 有、这个账号没有：" + S.missing.join(", ") + (S.notInLibrary.length ? `。其中 ${S.notInLibrary.length} 个不在 Library 里，ReCode 不会跟随：在资源库里导入它们` : "。点「立即同步」")) : S.extra.length ? cell("warn", `多 ${S.extra.length} 个`, S.extra.join(", ")) : cell("ok", `一致 · ${S.count}`)
+  out.md = { same: cell("ok", "一致"), different: cell("warn", "不同", "和 ~/.claude/CLAUDE.md 不一样"), missing: cell("bad", "没有", "这个账号没有 CLAUDE.md"), none: cell("", "Claude Code 也没有") }[a.claudeMd]
+  const P = a.folders.projects, F = a.folders["file-history"]
+  if (P === "shared" && F === "shared") out.sessions = cell("ok", "共享")
+  else if (a.waiting.length) out.sessions = cell("warn", "等空闲后共享", "这些文件夹最近有写入（会话还开着），空闲后再合并：" + a.waiting.join(", "))
+  else if (P === "elsewhere" || F === "elsewhere") out.sessions = cell("bad", "链到别处", "projects 或 file-history 是指向别处的链接或文件，ReCode 没动它")
+  else if (last?.options?.shareSessions) out.sessions = cell("warn", "还没共享")
+  else out.sessions = cell("", a.own ? `自己的 · ${a.own.sessions} 个会话` : "自己的")
+  return out
+}
+
+function names(list, cls) {
+  const box = el("div", "names")
+  if (!list.length) box.append(el("span", "faint", "—"))
+  for (const n of list) box.append(el("code", cls, n))
+  return box
+}
+
+function detail(a) {
+  const dl = el("dl")
+  const row = (k, v) => {
+    dl.append(el("dt", "", k))
+    const d = el("dd")
+    d.append(v instanceof Node ? v : document.createTextNode(v))
+    dl.append(d)
+  }
+  row("文件夹", a.dir)
+  row("Library 行", a.row)
+  if (a.mcp) {
+    const hub = { ok: "有（/hub/" + a.row + "）", bare: "裸 /hub", other: "地址不对", missing: "没有" }[a.mcp.hub]
+    row("magpie hub", hub)
+    row("MCP（账号里的）", names(a.mcp.names))
+    if (a.mcp.missing.length) row("MCP 缺少", names(a.mcp.missing, "miss"))
+    if (a.mcp.extra.length) row("MCP 多出", names(a.mcp.extra, "extra"))
+  }
+  row("Skill", `${a.skills.count} 个`)
+  if (a.skills.missing.length) row("Skill 缺少", names(a.skills.missing, "miss"))
+  if (a.skills.notInLibrary.length) row("其中不在 Library", el("span", "", a.skills.notInLibrary.join(", ") + " · 只在 ~/.claude/skills 里，ReCode 不会跟随，在资源库里导入后才会写进各账号"))
+  if (a.skills.extra.length) row("Skill 多出", names(a.skills.extra, "extra"))
+  row("CLAUDE.md", { same: "和 Claude Code 的一样", different: "和 Claude Code 的不一样", missing: "没有", none: "Claude Code 也没有" }[a.claudeMd])
+  const fs = { shared: "链到共享文件夹", own: "账号自己的文件夹", elsewhere: "指向别处", none: "还没有" }
+  row("会话 projects", fs[a.folders.projects] + (a.own ? ` · ${a.own.projects} 个项目，${a.own.sessions} 个会话，${a.own.memory} 条记忆` : ""))
+  row("检查点 file-history", fs[a.folders["file-history"]])
+  const b = el("button", "", "打开文件夹")
+  b.onclick = (e) => { e.stopPropagation(); act("/api/open", { what: "account", id: a.id }) }
+  const td = el("td")
+  td.colSpan = 8
+  td.append(dl)
+  const bar = el("div")
+  bar.style.marginTop = "8px"
+  bar.append(b)
+  td.append(bar)
+  const tr = el("tr", "detail")
+  tr.append(td)
+  return tr
+}
+
+function tile(n, text) {
+  const t = el("div", "tile")
+  t.append(el("b", "", n), el("span", "", text))
+  return t
+}
+
+function draw(s) {
+  last = s
+  const f = s.follower
+  const st = $("state")
+  st.replaceChildren()
+  const running = f && !f.refused
+  st.className = "chip " + (!f ? "bad" : f.refused ? "bad" : f.syncing || f.busy ? "warn" : "ok")
+  st.append(el("span", "dot"), el("span", "", !f ? "跟随器没在运行" : f.refused ? f.refused : f.syncing ? "正在同步 Library…" : f.busy ? "正在检查…" : "运行中"))
+  $("at").textContent = "更新于 " + new Date(s.at).toLocaleTimeString()
+  $("sync").disabled = !running || f.syncing
+  $("check").disabled = !running || f.busy
+
+  const A = s.accounts
+  const j = A.map(judge)
+  const count = (pred) => A.filter(pred).length
+  const n = A.length
+  $("tiles").replaceChildren(
+    tile(n, "个 ReCode 账号"),
+    tile(`${count((a, i) => j[i].library.classList.contains("ok"))}/${n}`, "Library 已跟上"),
+    tile(`${count((a, i) => j[i].mcp.classList.contains("ok"))}/${n}`, "MCP 和 Claude Code 一致"),
+    tile(`${count((a, i) => j[i].skills.classList.contains("ok"))}/${n}`, "Skill 一致"),
+    tile(`${count((a) => a.claudeMd === "same")}/${n}`, "CLAUDE.md 一致"),
+    tile(`${count((a) => a.folders.projects === "shared" && a.folders["file-history"] === "shared")}/${n}`, "会话和记忆已共享"),
+  )
+
+  const body = $("rows")
+  body.replaceChildren()
+  A.forEach((a, i) => {
+    const tr = el("tr", "acct")
+    const id = el("td")
+    const name = el("span", "cell")
+    name.append(el("span", "mono", a.id))
+    id.append(name)
+    if (j[i].link) { id.append(document.createTextNode(" ")); id.append(j[i].link) }
+    const used = el("td", "muted", ago(a.lastUsed))
+    used.title = when(a.lastUsed)
+    const tds = [id, used]
+    for (const k of ["library", "mcp", "skills", "md", "sessions"]) { const td = el("td"); td.append(j[i][k]); tds.push(td) }
+    const more = el("td", "faint", open.has(a.id) ? "收起" : "细节")
+    tds.push(more)
+    tr.append(...tds)
+    tr.onclick = () => { open.has(a.id) ? open.delete(a.id) : open.add(a.id); draw(last) }
+    body.append(tr)
+    if (open.has(a.id)) body.append(detail(a))
+  })
+  if (!A.length) { const tr = el("tr"); const td = el("td", "muted", `${s.recRoot} 下没有账号`); td.colSpan = 8; tr.append(td); body.append(tr) }
+
+  const M = s.main
+  const main = $("main")
+  main.replaceChildren(el("h2", "", "Claude Code（主配置）"))
+  const dm = el("dl")
+  const put = (dl, k, v) => { dl.append(el("dt", "", k)); const d = el("dd"); d.append(v instanceof Node ? v : document.createTextNode(v)); dl.append(d) }
+  put(dm, "文件夹", M.dir)
+  put(dm, "MCP", M.mcp ? names(M.mcp) : "~/.claude.json 读不了")
+  if (s.library) put(dm, "Library", `${s.library.hub ? "hub 模式（MCP 经 magpie hub 提供）" : "MCP 直接写进各 agent"} · claude 行勾了 ${s.library.claude.mcp.length} 个 MCP、${s.library.claude.skills.length} 个 skill${s.library.claude.instructions ? "、说明" : ""}`)
+  put(dm, "Skill", `${M.skills.length} 个` + (s.mainNotInLibrary?.length ? `，其中 ${s.mainNotInLibrary.length} 个不在 Library 里（${s.mainNotInLibrary.join(", ")}），不会跟随到账号` : ""))
+  put(dm, "CLAUDE.md", M.claudeMd ? `${M.claudeMd.lines} 行 · 更新于 ${when(M.claudeMd.mtime)}` : "没有")
+  put(dm, "会话", `${M.sessions.projects} 个项目，${M.sessions.sessions} 个会话（Claude Code 自己的，不和账号共享）`)
+  main.append(dm)
+  const ob = el("button", "", "打开 ~/.claude")
+  ob.onclick = () => act("/api/open", { what: "main" })
+  const mb = el("div"); mb.style.marginTop = "10px"; mb.append(ob); main.append(mb)
+
+  const S = s.shared
+  const sh = $("shared")
+  sh.replaceChildren(el("h2", "", "共享文件夹" + (S.on ? "" : "（共享会话没开）")))
+  const ds = el("dl")
+  put(ds, "位置", S.dir)
+  put(ds, "会话", `${S.projects} 个项目，${S.sessions} 个会话`)
+  put(ds, "项目记忆", `${S.memory} 条（projects/<项目>/memory/）`)
+  put(ds, "冲突", S.conflicts ? `${S.conflicts} 个文件（合并时内容不同、留下的另一份）` : "没有")
+  put(ds, "备份", S.backups ? `${S.backups} 个文件（被替换前的 CLAUDE.md）` : "没有")
+  sh.append(ds)
+  const bar = el("div"); bar.style.marginTop = "10px"; bar.style.display = "flex"; bar.style.gap = "8px"
+  for (const [what, label] of [["shared", "打开共享文件夹"], ["conflicts", "打开冲突"], ["backups", "打开备份"]]) {
+    const b = el("button", "", label)
+    b.onclick = () => act("/api/open", { what })
+    bar.append(b)
+  }
+  sh.append(bar)
+
+  const r = $("runner")
+  r.replaceChildren(el("h2", "", "后台"))
+  const dr = el("dl")
+  if (f) {
+    put(dr, "上次检查", f.lastTick ? `${when(f.lastTick)}（每 ${Math.round(f.every / 1000)} 秒一次）` : "还没有")
+    put(dr, "上次同步", f.lastSync ? `${when(f.lastSync.at)} · ${f.lastSync.ok ? "成功" : "失败"} · ${Math.round(f.lastSync.ms / 1000)} 秒` : "这次启动后还没同步过")
+    if (f.lastSync && !f.lastSync.ok) put(dr, "失败原因", el("span", "mono", f.lastSync.out))
+    put(dr, "欠着的同步", f.owed ? (f.holdUntil ? `有，失败后等到 ${when(f.holdUntil)} 再试` : "有，下次检查时做") : "没有")
+    put(dr, "magpie 命令行", f.magpie || "还没找到")
+  } else put(dr, "状态", "这个 magpie 里跟随器没在运行")
+  r.append(dr)
+
+  const o = $("opts")
+  o.replaceChildren(el("h2", "", "选项"))
+  const dop = el("dl")
+  const O = s.options || {}
+  const yes = (v, d) => ((v ?? d) ? "开" : "关")
+  put(dop, "跟随 Library（follow）", yes(O.follow, true))
+  put(dop, "共享会话（shareSessions）", yes(O.shareSessions, false))
+  put(dop, "跟随 CLAUDE.md（followClaudeMd）", yes(O.followClaudeMd, true))
+  put(dop, "检查间隔（every）", `${O.every || 5000} 毫秒`)
+  put(dop, "空闲多久才合并（quietMinutes）", `${O.quietMinutes ?? 10} 分钟`)
+  put(dop, "面板端口（port）", String(O.port || 3587))
+  o.append(dop)
+  o.append(el("div", "say muted", "在 magpie 的「插件」页 → ReCode → 选项里修改。"))
+
+  $("log").textContent = f ? [...f.events].reverse().map((e) => `${new Date(e.at).toLocaleString()}  ${e.msg}`).join("\n") || "（这次启动后还没有）" : ""
+  schedule(f && (f.busy || f.syncing) ? 2000 : 8000)
+}
+
+function say(text, err) {
+  const s = $("say")
+  s.textContent = text
+  s.className = "say " + (err ? "err" : "muted")
+}
+
+async function load(fresh) {
+  try {
+    draw(await api("api/status" + (fresh ? "?fresh=1" : "")))
+  } catch (e) {
+    say("读不到 ReCode 的状态：" + e.message, true)
+    schedule(8000)
+  }
+}
+
+function schedule(ms) {
+  clearTimeout(timer)
+  timer = setTimeout(() => { if (document.visibilityState !== "hidden") load(false); else schedule(ms) }, ms)
+}
+
+async function act(path, body) {
+  try {
+    const r = await api(path.replace(/^\//, ""), body)
+    if (r.opened) say("已打开 " + r.opened)
+    else if (path === "/api/sync") say("开始同步 Library（magpie library sync，可能要几分钟）…")
+    else if (path === "/api/check") say("开始检查…")
+    setTimeout(() => load(true), 600)
+  } catch (e) {
+    say(e.message, true)
+  }
+}
+
+$("refresh").onclick = () => { say(""); load(true) }
+$("check").onclick = () => act("/api/check", {})
+$("sync").onclick = () => act("/api/sync", {})
+load(true)
+</script>
+</body>
+</html>

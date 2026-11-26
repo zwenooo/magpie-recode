@@ -1,13 +1,17 @@
 {
   "name": "magpie-plugin-recode",
-  "version": "0.3.0",
-  "description": "ReCode (recode.cat) accounts as magpie Library rows (claude#rec-<id>) that follow Claude Code's MCP servers, skills and instructions, with optional sessions shared across accounts",
+  "version": "0.4.0",
+  "description": "ReCode (recode.cat) accounts as magpie Library rows (claude#rec-<id>) that follow Claude Code's MCP servers, skills, instructions and CLAUDE.md, with optional sessions shared across accounts, and a panel in magpie's window",
   "type": "module",
   "main": "index.js",
   "files": [
     "index.js",
     "follow.js",
     "share.js",
+    "claudemd.js",
+    "panel.js",
+    "service.js",
+    "ui/",
     "README.md",
     "LICENSE"
   ],
@@ -20,8 +24,8 @@
     "name": "ReCode",
     "icon": "https://www.recode.cat/logo/logo-single.svg",
     "summary": {
-      "en": "ReCode accounts as Library rows (claude#rec-<id>) that follow Claude Code's MCP servers, skills and instructions; optionally one shared sessions folder for every account.",
-      "zh": "ReCode 的每个账号成为 Library 的 claude#rec-<id> 行，跟随 Claude Code 的 MCP、skill 和说明；可选所有账号共用一个会话文件夹。"
+      "en": "ReCode accounts as Library rows (claude#rec-<id>) that follow Claude Code's MCP servers, skills, instructions and CLAUDE.md; optionally one shared sessions folder for every account; a panel in magpie's window shows each account.",
+      "zh": "ReCode 的每个账号成为 Library 的 claude#rec-<id> 行，跟随 Claude Code 的 MCP、skill、说明和 CLAUDE.md；可选所有账号共用一个会话文件夹；magpie 窗口里有面板看每个账号的情况。"
     },
     "options": {
       "recRoot": "",
@@ -30,7 +34,22 @@
       "follow": true,
       "shareSessions": false,
       "sharedDir": "",
-      "quietMinutes": 10
+      "quietMinutes": 10,
+      "followClaudeMd": true,
+      "port": 3587
+    },
+    "page": {
+      "title": "ReCode",
+      "titles": {
+        "zh": "ReCode 面板",
+        "zh-TW": "ReCode 面板"
+      },
+      "file": "ui/index.html",
+      "icon": "ui/icon.svg",
+      "service": {
+        "port": 3587,
+        "option": "port"
+      }
     }
   }
 }
