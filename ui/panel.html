@@ -37,6 +37,7 @@
   .tile { flex: 1 1 130px; padding: 10px 14px; box-shadow: -1px 0 0 var(--line), 0 -1px 0 var(--line); }
   .tile b { display: block; font-size: 18px; font-weight: 600; }
   .tile span { font-size: 12px; color: var(--muted); }
+  .tile b small { font-size: 12px; font-weight: 400; color: var(--muted); }
   section { margin-top: 22px; }
   table { width: 100%; border-collapse: collapse; background: var(--card); border: 1px solid var(--line); border-radius: 10px; overflow: hidden; }
   th, td { text-align: left; padding: 7px 10px; border-bottom: 1px solid var(--line); vertical-align: top; white-space: nowrap; }
@@ -233,9 +234,12 @@ function detail(a) {
   return tr
 }
 
-function tile(n, text) {
+// tile is a number with its unit beside it, and what it counts under it
+function tile(n, unit, text) {
   const t = el("div", "tile")
-  t.append(el("b", "", n), el("span", "", text))
+  const b = el("b", "", n)
+  if (unit) b.append(el("small", "", " " + unit))
+  t.append(b, el("span", "", text))
   return t
 }
 
@@ -256,12 +260,14 @@ function draw(s) {
   const count = (pred) => A.filter(pred).length
   const n = A.length
   $("tiles").replaceChildren(
-    tile(n, "个 ReCode 账号"),
-    tile(`${count((a, i) => j[i].library.classList.contains("ok"))}/${n}`, "Library 已跟上"),
-    tile(`${count((a, i) => j[i].mcp.classList.contains("ok"))}/${n}`, "MCP 和 Claude Code 一致"),
-    tile(`${count((a, i) => j[i].skills.classList.contains("ok"))}/${n}`, "Skill 一致"),
-    tile(`${count((a) => a.claudeMd === "same")}/${n}`, "CLAUDE.md 一致"),
-    tile(`${count((a) => a.folders.projects === "shared" && a.folders["file-history"] === "shared")}/${n}`, "会话和记忆已共享"),
+    tile(n, "个账号", "ReCode 账号"),
+    tile(`${count((a, i) => j[i].library.classList.contains("ok"))}/${n}`, "个账号", "Library 勾选已跟上"),
+    tile(`${count((a, i) => j[i].mcp.classList.contains("ok"))}/${n}`, "个账号", "MCP 和 Claude Code 一致"),
+    tile(`${count((a, i) => j[i].skills.classList.contains("ok"))}/${n}`, "个账号", "Skill 和 Claude Code 一致"),
+    tile(`${count((a) => a.claudeMd === "same")}/${n}`, "个账号", "CLAUDE.md 和 Claude Code 一致"),
+    s.shared.on
+      ? tile(s.shared.sessions, "个会话", `共享文件夹里 ${s.shared.projects} 个项目、${s.shared.memory} 条项目记忆，${count((a) => a.folders.projects === "shared" && a.folders["file-history"] === "shared")}/${n} 个账号已共用`)
+      : tile(`${count((a) => a.folders.projects === "shared")}/${n}`, "个账号", "会话已共享（共享会话没开）"),
   )
 
   const body = $("rows")
