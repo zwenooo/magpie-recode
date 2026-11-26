@@ -60,6 +60,13 @@ function names(dir) {
   }
 }
 
+// skillsIn is the skills a skills folder holds: the folders (or links to
+// them) with a SKILL.md. Anything else there (a sync tool's marker folder,
+// .trash) is no skill Claude Code loads.
+export function skillsIn(dir) {
+  return (names(dir) ?? []).filter((n) => fs.existsSync(path.join(dir, n, "SKILL.md")))
+}
+
 // mcpOf is the MCP servers a .claude.json names: {names, hub}. hub is the
 // path after /mcp/magpie/hub of the magpie entry ("" for the bare one),
 // null when it has none. A file that isn't there names none; null for one
@@ -165,7 +172,7 @@ export function collect({ home, recRoot, sharedDir, configDir, options = {}, fol
   const mainDir = path.join(home, ".claude")
   const mainMd = read(path.join(mainDir, FILE))
   const mainMcp = mcpOf(path.join(home, ".claude.json"))
-  const mainSkills = names(path.join(mainDir, "skills")) ?? []
+  const mainSkills = skillsIn(path.join(mainDir, "skills"))
   const main = {
     dir: mainDir,
     mcp: mainMcp?.names ?? null,
@@ -184,7 +191,7 @@ export function collect({ home, recRoot, sharedDir, configDir, options = {}, fol
     const row = rowOf(a.id)
     const link = path.join(home, ".claude-rec-" + a.id)
     const mcp = mcpOf(path.join(a.dir, ".claude.json"))
-    const skills = names(path.join(a.dir, "skills")) ?? []
+    const skills = skillsIn(path.join(a.dir, "skills"))
     const md = read(path.join(a.dir, FILE))
     const t = ticks?.rows[row]
     const folders = {}

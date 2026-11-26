@@ -10,8 +10,16 @@ function tree() {
   const recRoot = path.join(home, ".rec", "claude", "accounts")
   const sharedDir = path.join(home, ".rec-sessions")
   fs.mkdirSync(configDir, { recursive: true })
-  fs.mkdirSync(path.join(home, ".claude", "skills", "alpha"), { recursive: true })
-  fs.mkdirSync(path.join(home, ".claude", "skills", "beta"), { recursive: true })
+  for (const s of ["alpha", "beta"]) {
+    fs.mkdirSync(path.join(home, ".claude", "skills", s), { recursive: true })
+    fs.writeFileSync(path.join(home, ".claude", "skills", s, "SKILL.md"), `---
+name: ${s}
+---
+`)
+  }
+  // a sync tool's marker folder: no skill
+  fs.mkdirSync(path.join(home, ".claude", "skills", "synced"), { recursive: true })
+  fs.writeFileSync(path.join(home, ".claude", "skills", "synced", ".bucket-1"), "")
   fs.writeFileSync(path.join(home, ".claude", "CLAUDE.md"), "- 中文\n")
   fs.writeFileSync(path.join(home, ".claude.json"), JSON.stringify({ mcpServers: { magpie: { type: "http", url: "http://127.0.0.1:3425/mcp/magpie/hub" } } }))
   const acct = (id, { mcp, skills = [], md = null }) => {
@@ -19,7 +27,10 @@ function tree() {
     fs.mkdirSync(dir, { recursive: true })
     fs.writeFileSync(path.join(dir, "settings.json"), "{}")
     fs.writeFileSync(path.join(dir, ".claude.json"), JSON.stringify({ mcpServers: mcp }))
-    for (const s of skills) fs.mkdirSync(path.join(dir, "skills", s), { recursive: true })
+    for (const s of skills) {
+      fs.mkdirSync(path.join(dir, "skills", s), { recursive: true })
+      fs.writeFileSync(path.join(dir, "skills", s, "SKILL.md"), "x")
+    }
     if (md !== null) fs.writeFileSync(path.join(dir, "CLAUDE.md"), md)
     fs.symlinkSync(dir, path.join(home, ".claude-rec-" + id), "junction")
     return dir
