@@ -57,17 +57,23 @@ Sessions 页也会读到这些账号的对话：magpie 会读家目录下每个 
 
 ## 面板
 
-magpie 侧边栏「插件」下有「ReCode 面板」，逐个账号和 Claude Code（`~/.claude`）比较：
+magpie 侧边栏「插件」下有「ReCode 面板」，逐个账号和 Claude Code（`~/.claude`）比较。
+
+最上面一句话说结论（几个账号没跟上 Claude Code），下面把各账号的出入按内容合并成一条条：
+是什么、哪几个账号（点账号号跳到它那一行）、要不要管。红点是没跟上的，黄点是要留意的，
+灰点只是不同、不用管（比如账号里直接写了一个 Library 和 Claude Code 都没有的 MCP）。
+
+表格里一样的格子只打 ✓，不一样的才写出来：
 
 | 列 | 看的是什么 |
 | --- | --- |
-| Library 勾选 | 这个账号行在 Library 里勾上的 MCP 和 skill，是否和 `claude` 行一样 |
-| MCP | 账号 `.claude.json` 里有没有 magpie hub（`/hub/claude%23rec-<id>`），比 Claude Code 多了或少了哪些 |
+| Library | 这个账号行在 Library 里勾上的 MCP 和 skill，是否和 `claude` 行一样 |
+| MCP | 账号 `.claude.json` 里有没有 magpie hub（`/hub/claude%23rec-<id>`），比 Claude Code 少了哪些、多了哪些。多出的如果 Library 里也有，标「重复」（hub 已经给了，会出现两套同名工具）；Library 里没有的标「+ 名字」 |
 | Skill | 账号 `skills/` 比 `~/.claude/skills` 少了或多了哪些；只在 `~/.claude/skills`、不在 Library 里的 skill 不会跟随，面板会标出来 |
 | CLAUDE.md | 和 `~/.claude/CLAUDE.md` 是否一样 |
-| 会话 · 项目记忆 | `projects`（会话和各项目的 `memory/`）、`file-history`（`/rewind` 检查点）是否链到共享文件夹 |
+| 会话 | `projects`（会话和各项目的 `memory/`）、`file-history`（`/rewind` 检查点）是否链到共享文件夹 |
 
-点一行看细节（具体缺了、多了哪些，文件夹位置）。下面是 Claude Code 主配置、共享文件夹（会话数、
+「有出入」只列和 Claude Code 不一样的账号。点一行看细节（具体缺了、多了哪些，文件夹位置）。下面是 Claude Code 主配置、共享文件夹（会话数、
 记忆条数、冲突和备份文件，可以直接打开）、后台（上次检查、上次同步、欠着的同步）、选项和最近
 100 条日志。「立即检查」马上跑一次检查，「立即同步」马上运行 `magpie library sync`。
 

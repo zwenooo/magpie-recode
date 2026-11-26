@@ -38,7 +38,7 @@ name: ${s}
   const hub = (row) => ({ type: "http", url: `http://127.0.0.1:3425/mcp/magpie/hub/${encodeURIComponent(row)}`, headers: { Authorization: "Bearer secret-token" } })
   acct("100", { mcp: { magpie: hub("claude#rec-100") }, skills: ["alpha", "beta"], md: "- 中文\n" })
   acct("200", { mcp: { magpie: hub("claude#rec-200"), "ops-mcp": { command: "uvx", env: { KEY: "secret" } } }, skills: ["alpha"], md: "- 旧\n" })
-  acct("300", { mcp: { "ops-mcp": { command: "uvx" } } })
+  acct("300", { mcp: { "ops-mcp": { command: "uvx" }, node_repl: { command: "node" } } })
   // 100 shares its sessions; 200 keeps its own
   fs.mkdirSync(path.join(sharedDir, "projects", "p1", "memory"), { recursive: true })
   fs.writeFileSync(path.join(sharedDir, "projects", "p1", "s1.jsonl"), "{}\n")
@@ -61,7 +61,7 @@ name: ${s}
 test("mcpOf: names and the hub's path, nothing else", () => {
   const { recRoot } = tree()
   expect(mcpOf(path.join(recRoot, "200", "config", ".claude.json"))).toEqual({ names: ["magpie", "ops-mcp"], hub: "claude#rec-200" })
-  expect(mcpOf(path.join(recRoot, "300", "config", ".claude.json"))).toEqual({ names: ["ops-mcp"], hub: null })
+  expect(mcpOf(path.join(recRoot, "300", "config", ".claude.json"))).toEqual({ names: ["node_repl", "ops-mcp"], hub: null })
   expect(mcpOf(path.join(recRoot, "nope", ".claude.json"))).toEqual({ names: [], hub: null })
   fs.writeFileSync(path.join(recRoot, "100", "bad.json"), "{")
   expect(mcpOf(path.join(recRoot, "100", "bad.json"))).toBe(null)
@@ -76,20 +76,20 @@ test("collect compares each account with Claude Code's own", () => {
   const [a, b, c] = s.accounts
   expect(a.link).toBe("ok")
   expect(a.library).toEqual({ mcp: [1, 1], skills: [2, 2], instructions: null })
-  expect(a.mcp).toMatchObject({ hub: "ok", missing: [], extra: [] })
+  expect(a.mcp).toMatchObject({ hub: "ok", missing: [], extra: [], dupes: [] })
   expect(a.skills).toEqual({ count: 2, missing: [], extra: [], notInLibrary: [] })
   expect(a.claudeMd).toBe("same")
   expect(a.folders).toEqual({ projects: "shared", "file-history": "shared" })
   expect(a.own).toBe(null)
 
   expect(b.library).toEqual({ mcp: [1, 1], skills: [0, 2], instructions: null })
-  expect(b.mcp).toMatchObject({ hub: "ok", extra: ["ops-mcp"] })
+  expect(b.mcp).toMatchObject({ hub: "ok", extra: ["ops-mcp"], dupes: ["ops-mcp"] })
   expect(b.skills).toEqual({ count: 1, missing: ["beta"], extra: [], notInLibrary: [] })
   expect(b.claudeMd).toBe("different")
   expect(b.folders.projects).toBe("own")
   expect(b.own).toEqual({ projects: 1, sessions: 1, memory: 0 })
 
-  expect(c.mcp.hub).toBe("missing")
+  expect(c.mcp).toMatchObject({ hub: "missing", extra: ["node_repl", "ops-mcp"], dupes: ["ops-mcp"] })
   expect(s.mainNotInLibrary).toEqual([])
   expect(c.claudeMd).toBe("missing")
   expect(s.shared).toMatchObject({ projects: 1, sessions: 1, memory: 1, conflicts: 0, on: true })

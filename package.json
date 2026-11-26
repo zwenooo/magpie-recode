@@ -1,6 +1,6 @@
 {
   "name": "magpie-plugin-recode",
-  "version": "0.4.3",
+  "version": "0.4.4",
   "description": "ReCode (recode.cat) accounts as magpie Library rows (claude#rec-<id>) that follow Claude Code's MCP servers, skills, instructions and CLAUDE.md, with optional sessions shared across accounts, and a panel in magpie's window",
   "type": "module",
   "main": "index.js",

@@ -161,9 +161,23 @@ export function libraryTicks(configDir, rows) {
     skills: skills.filter((s) => (s.agents ?? []).includes(row)).map((s) => s.name),
     instructions: instr.includes(row),
   })
-  const out = { claude: of("claude"), hub: !!lib.mcpHub, skills: skills.map((s) => s.name), rows: {} }
+  const out = { claude: of("claude"), hub: !!lib.mcpHub, mcp: mcp.map((s) => s.name), skills: skills.map((s) => s.name), rows: {} }
   for (const r of rows) out.rows[r] = of(r)
   return out
+}
+
+// mcpRow is an account's MCP servers against Claude Code's: its hub,
+// what it lacks and has besides. dupes are those besides that the Library
+// has too (the hub gives them already); the rest are the account's own.
+function mcpRow(mcp, row, want, ticks) {
+  const d = diff(mcp.names, want)
+  const lib = ticks?.mcp ?? []
+  return {
+    names: mcp.names,
+    hub: mcp.hub === null ? "missing" : mcp.hub === row ? "ok" : mcp.hub === "" ? "bare" : "other",
+    ...d,
+    dupes: d.extra.filter((n) => lib.includes(n)),
+  }
 }
 
 // collect is everything the panel shows. follower, when given, adds what
@@ -205,7 +219,7 @@ export function collect({ home, recRoot, sharedDir, configDir, options = {}, fol
       link: linkState(link, a.dir) === "shared" ? "ok" : lstat(link) ? "other" : "missing",
       row,
       library: t && want ? { mcp: [t.mcp.filter((x) => want.mcp.includes(x)).length, want.mcp.length], skills: [t.skills.filter((x) => want.skills.includes(x)).length, want.skills.length], instructions: want.instructions ? t.instructions : null } : null,
-      mcp: mcp ? { names: mcp.names, hub: mcp.hub === null ? "missing" : mcp.hub === row ? "ok" : mcp.hub === "" ? "bare" : "other", ...diff(mcp.names, main.mcp ?? []) } : null,
+      mcp: mcp ? mcpRow(mcp, row, main.mcp ?? [], ticks) : null,
       skills: { count: skills.length, ...diff(skills, mainSkills), notInLibrary: ticks ? diff(skills, mainSkills).missing.filter((n) => !ticks.skills.includes(n)) : [] },
       claudeMd: md === null ? (mainMd === null ? "none" : "missing") : hashOf(md) === mainHash ? "same" : "different",
       folders,
